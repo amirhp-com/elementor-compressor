@@ -1,6 +1,6 @@
 {
   "name": "Elementor Compressor",
-  "version": "1.5.0",
-  "description": "v1.5: Full-height UI, iOS-style toggles, persistent settings, auto-format on paste, and immersive success feedback with generated audio.",
+  "version": "1.8.1",
+  "description": "v1.8.1: UI refinement - removed redundant toast hints for a minimal experience.",
   "requestFramePermissions": []
 }

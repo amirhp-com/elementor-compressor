@@ -12,7 +12,8 @@ import {
   Check,
   AlertCircle,
   XCircle,
-  Sparkles
+  Sparkles,
+  ClipboardPaste
 } from 'lucide-react';
 import { JsonEditor } from './components/JsonEditor';
 import { compressElementorJSON, formatByteSize } from './utils/compressor';
@@ -55,6 +56,7 @@ const App: React.FC = () => {
   const [toast, setToast] = useState<{ show: boolean; success: boolean; message: string }>({ show: false, success: false, message: '' });
   
   const editorRef = useRef<any>(null);
+  const toastTimeoutRef = useRef<any>(null);
 
   // Compressor Settings with LocalStorage persistence
   const [options, setOptions] = useState<CompressorOptions>(() => {
@@ -93,26 +95,33 @@ const App: React.FC = () => {
     }
   };
 
-  const showToast = (success: boolean, message: string) => {
-    setToast({ show: true, success, message });
-    if (success) playSuccessSound();
-    setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
-  };
-
   const handleCopy = useCallback((text: string) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopyStatus('copied');
     setTimeout(() => setCopyStatus('idle'), 2000);
   }, []);
 
-  const handleCompress = useCallback(() => {
-    if (!inputJSON.trim()) return;
+  const showToast = useCallback((success: boolean, message: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ show: true, success, message });
+    if (success) playSuccessSound();
+    toastTimeoutRef.current = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 2000);
+  }, []);
+
+  const closeToast = () => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast(prev => ({ ...prev, show: false }));
+  };
+
+  const performConversion = useCallback((rawJson: string) => {
+    if (!rawJson.trim()) return;
     setIsProcessing(true);
     setError(null);
 
     try {
-      const parsed = JSON.parse(inputJSON);
-      const originalBytes = new TextEncoder().encode(inputJSON).length;
+      const parsed = JSON.parse(rawJson);
+      const originalBytes = new TextEncoder().encode(rawJson).length;
       
       const { cleaned, removedCount } = compressElementorJSON(parsed, options);
       const compressed = JSON.stringify(cleaned, null, 2);
@@ -126,7 +135,6 @@ const App: React.FC = () => {
         removedKeys: removedCount
       });
 
-      // Show immersive success
       handleCopy(compressed);
       showToast(true, 'Optimized & Copied to Clipboard!');
     } catch (e: any) {
@@ -135,7 +143,11 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [inputJSON, options, handleCopy]);
+  }, [options, handleCopy, showToast]);
+
+  const handleCompress = useCallback(() => {
+    performConversion(inputJSON);
+  }, [inputJSON, performConversion]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -148,21 +160,47 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleCompress]);
 
-  const handleEditorMount = (editor: any) => {
+  const handleEditorMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
-    editor.onDidPaste(() => {
-      if (options.autoFormatOnPaste) {
-        setTimeout(() => {
-          try {
-            const val = editor.getValue();
-            const obj = JSON.parse(val);
-            setInputJSON(JSON.stringify(obj, null, 2));
-          } catch (e) {
-            // Not valid JSON yet, skip auto-format
-          }
-        }, 100);
-      }
+    
+    // Integrated shortcut for the editor
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      handleCompress();
     });
+
+    editor.onDidPaste(() => {
+      setTimeout(() => {
+        try {
+          const val = editor.getValue();
+          const obj = JSON.parse(val);
+          const formatted = JSON.stringify(obj, null, 2);
+          setInputJSON(formatted);
+          // Run conversion and copy automatically on paste
+          performConversion(formatted);
+        } catch (e) {
+          // Not valid JSON yet, skip auto-format and auto-convert
+        }
+      }, 100);
+    });
+  };
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setInputJSON(text);
+        performConversion(text);
+      }
+    } catch (err) {
+      showToast(false, 'Clipboard access denied');
+    }
+  };
+
+  const handleClearAll = () => {
+    setInputJSON('');
+    setOutputJSON('');
+    setStats(null);
+    setError(null);
   };
 
   const handlePrettify = (target: 'input' | 'output') => {
@@ -191,7 +229,11 @@ const App: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => setInputJSON(event.target?.result as string);
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      setInputJSON(result);
+      performConversion(result);
+    };
     reader.readAsText(file);
   };
 
@@ -215,7 +257,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">v1.5: High-Performance Immersive UI</p>
+            <p className="text-xs text-[#8b949e]">v1.8.1: Smart Clipboard & Immersive UI</p>
           </div>
         </div>
         
@@ -266,9 +308,18 @@ const App: React.FC = () => {
               <span>Input Source</span>
             </div>
             <div className="flex items-center gap-2">
+              <button 
+                onClick={handlePasteFromClipboard} 
+                className="flex items-center gap-1.5 px-2 py-1 text-xs text-[#c9d1d9] bg-[#21262d] border border-[#30363d] rounded hover:bg-[#30363d] transition-colors"
+              >
+                <ClipboardPaste className="w-3.5 h-3.5" />
+                Paste
+              </button>
               <button onClick={() => handlePrettify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors">Prettify</button>
               <button onClick={() => handleMinify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors">Minify</button>
-              <button onClick={() => setInputJSON('')} className="p-1.5 text-[#8b949e] hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+              <button onClick={handleClearAll} className="p-1.5 text-[#8b949e] hover:text-red-400 transition-colors" title="Clear All">
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
@@ -372,7 +423,7 @@ const App: React.FC = () => {
       <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-[#f0f6fc]">Elementor Compressor</span>
-          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v1.5.0</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v1.8.1</span>
           <span className="text-[10px] text-[#8b949e] hidden sm:inline ml-2">Built by amirhp.com</span>
         </div>
         <div className="flex items-center gap-4">
@@ -381,19 +432,24 @@ const App: React.FC = () => {
         </div>
       </footer>
 
-      {/* Immersive Success Toast / Modal */}
+      {/* Immersive Floating Toast (No background overlay) */}
       {toast.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-md animate-in fade-in duration-300"></div>
-          <div className="relative bg-[#161b22] border border-[#30363d] rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-6 animate-in zoom-in slide-in-from-bottom-10 duration-500 pointer-events-auto">
-            <div className={`p-6 rounded-full ${toast.success ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'} scale-125`}>
+        <div 
+          className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center"
+        >
+          {/* Toast Card with high contrast and deep shadow */}
+          <div 
+            onClick={closeToast}
+            className="relative bg-[#161b22] border border-[#30363d] rounded-2xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-300 transform scale-100 shadow-[0_0_50px_rgba(0,0,0,0.8)] pointer-events-auto cursor-pointer hover:border-[#58a6ff] transition-all"
+          >
+            <div className={`p-6 rounded-full ${toast.success ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'} scale-125 shadow-inner`}>
               {toast.success ? <Sparkles className="w-12 h-12" /> : <XCircle className="w-12 h-12" />}
             </div>
             <div className="text-center">
               <h2 className={`text-3xl font-bold mb-2 ${toast.success ? 'text-green-400' : 'text-red-400'}`}>
                 {toast.success ? 'Success!' : 'Oops!'}
               </h2>
-              <p className="text-[#c9d1d9] text-lg font-medium">{toast.message}</p>
+              <p className="text-[#c9d1d9] text-lg font-medium max-w-xs">{toast.message}</p>
             </div>
             {toast.success && (
               <div className="px-4 py-2 bg-[#21262d] rounded-lg border border-[#30363d] text-sm text-[#8b949e] flex items-center gap-2">
