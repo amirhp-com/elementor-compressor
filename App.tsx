@@ -11,7 +11,6 @@ import {
   Github,
   Check,
   AlertCircle,
-  Settings2,
   XCircle,
   Sparkles
 } from 'lucide-react';
