@@ -20,6 +20,18 @@ export const compressElementorJSON = (
 ): { cleaned: any; removedCount: number } => {
   let removedCount = 0;
 
+  // Prefixes for nodes that should be removed if RTLize is on
+  const keysToRemovePrefixes = [
+    "background_hover_video", 
+    "background_motion_fx", 
+    "background_overlay_video", 
+    "background_overlay_hover", 
+    "css_filters_hover", 
+    "box_shadow_hover", 
+    "shape_divider", 
+    "sticky"
+  ];
+
   const isRedundantElementorObject = (val: any): boolean => {
     if (val && typeof val === 'object' && !Array.isArray(val)) {
       const hasSize = 'size' in val;
@@ -51,7 +63,9 @@ export const compressElementorJSON = (
       
       // Flags for current node type
       const isTextEditor = val.widgetType === 'text-editor';
-      const isMainContainer = val.elType === 'container' && val.isInner === false;
+      const isContainer = val.elType === 'container';
+      const isMainContainer = isContainer && val.isInner === false;
+      const isInnerContainer = isContainer && val.isInner === true;
 
       for (const key in val) {
         let value = val[key];
@@ -60,6 +74,18 @@ export const compressElementorJSON = (
         if (options.removeMotionFX && key.startsWith('motion_fx_')) {
           removedCount++;
           continue;
+        }
+
+        // RTLize Specific Removals
+        if (options.rtlize) {
+          if (key === 'uich_custom_css_field') {
+            removedCount++;
+            continue;
+          }
+          if (keysToRemovePrefixes.some(p => key.startsWith(p))) {
+            removedCount++;
+            continue;
+          }
         }
 
         // Rule: Find nodes named "_element_width" and set their value to empty string
@@ -95,6 +121,11 @@ export const compressElementorJSON = (
             cleanedValue['align'] = 'start';
           }
 
+          // Rule: Inner container logic
+          if (isInnerContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
+            cleanedValue['flex_size'] = 'none';
+          }
+
           // Rule: RTLize for main containers (elType: container, isInner: false)
           if (isMainContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
             // Set content_width to full
@@ -103,6 +134,16 @@ export const compressElementorJSON = (
             // Set width structure
             cleanedValue['width'] = { "unit": "%", "size": "", "sizes": [] };
             
+            // Set margin structure
+            cleanedValue['margin'] = {
+              "unit": "px",
+              "isLinked": false,
+              "top": "0",
+              "right": "0",
+              "bottom": "0",
+              "left": "0"
+            };
+
             // Force flex_direction to row-reverse
             cleanedValue['flex_direction'] = 'row-reverse';
 
