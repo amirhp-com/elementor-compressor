@@ -1,5 +1,6 @@
 {
   "name": "Elementor Compressor",
-  "description": "A high-performance utility to compress Elementor JSON files by removing redundant properties, empty sizes, and useless metadata while preserving functionality.",
+  "version": "1.3.0",
+  "description": "v1.3: High-performance utility to compress Elementor JSON files by removing redundant properties, empty sizes, and useless metadata while preserving functionality. Featuring advanced RTLize logic and MotionFX removal.",
   "requestFramePermissions": []
 }

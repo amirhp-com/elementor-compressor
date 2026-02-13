@@ -131,7 +131,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">V2: Optimized logic + Monaco Editor</p>
+            <p className="text-xs text-[#8b949e]">v1.3: Advanced logic + Monaco Editor</p>
           </div>
         </div>
         
@@ -296,7 +296,7 @@ const App: React.FC = () => {
           <div className="space-y-2">
             <div className="flex items-center justify-center sm:justify-start gap-2 text-[#f0f6fc] font-bold">
               <span>Elementor Compressor</span>
-              <span className="px-2 py-0.5 rounded-full bg-[#1f6feb] text-[10px]">v2.0.0</span>
+              <span className="px-2 py-0.5 rounded-full bg-[#1f6feb] text-[10px]">v1.3.0</span>
             </div>
             <p className="text-sm text-[#8b949e]">
               Built by <a href="https://amirhp.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">AmirhpCom</a>. 
