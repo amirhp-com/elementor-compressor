@@ -119,7 +119,6 @@ const App: React.FC = () => {
       playSuccessSound();
       toastTimeoutRef.current = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 2000);
     }
-    // If error, no timeout is set, making it persistent until dismissed by click
   }, []);
 
   const closeToast = () => {
@@ -193,7 +192,6 @@ const App: React.FC = () => {
               performConversion(formatted);
             }
           } catch (e) {
-            
             setInputJSON(val);
             if (options.autoConvertOnPaste) {
               performConversion(val);
@@ -213,8 +211,17 @@ const App: React.FC = () => {
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
-        setInputJSON(text);
-        performConversion(text);
+        let finalInputText = text;
+        if (options.autoFormatOnPaste) {
+          try {
+            const obj = JSON.parse(text);
+            finalInputText = JSON.stringify(obj, null, 2);
+          } catch (e) {
+            // Keep original text if JSON parse fails
+          }
+        }
+        setInputJSON(finalInputText);
+        performConversion(finalInputText);
       }
     } catch (err) {
       showToast(false, 'Clipboard access denied');
@@ -284,7 +291,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">v2.3.0: Icon Box RTL & Hierarchy Refinement</p>
+            <p className="text-xs text-[#8b949e]">v2.4.0: Paste Fix & Advanced RTL Logic</p>
           </div>
         </div>
         
@@ -460,7 +467,7 @@ const App: React.FC = () => {
       <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-[#f0f6fc]">Elementor Compressor</span>
-          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v2.3.0</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v2.4.0</span>
           <span className="text-[10px] text-[#8b949e] hidden sm:inline ml-2">Built by amirhp.com</span>
         </div>
         <div className="flex items-center gap-4">

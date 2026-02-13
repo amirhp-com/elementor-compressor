@@ -1,6 +1,6 @@
 {
   "name": "Elementor Compressor",
-  "version": "2.3.0",
-  "description": "v2.3.0: Added icon-box text alignment RTL handling and deep nesting fixes.",
+  "version": "2.4.0",
+  "description": "v2.4.0: Fixed Auto-Format bug for Paste & Optimize button and improved clipboard handling.",
   "requestFramePermissions": []
 }
