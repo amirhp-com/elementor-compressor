@@ -19,6 +19,7 @@ export const compressElementorJSON = (
   options: CompressorOptions = { rtlize: false, removeMotionFX: false, autoFormatOnPaste: true, autoConvertOnPaste: true }
 ): { cleaned: any; removedCount: number } => {
   let removedCount = 0;
+  let sectionHolderFound = false;
 
   // Prefixes for nodes that should be removed if RTLize is on
   const keysToRemovePrefixes = [
@@ -50,11 +51,13 @@ export const compressElementorJSON = (
    * Recursive cleaner
    * @param val Value to clean
    * @param parentKey Key of the parent property
-   * @param isTopLevel Whether this node is a direct child of the root (section holder)
+   * @param isTopLevel Whether this node is potentially a Section Holder candidate
+   * @param forceInner Whether this node and its children must be treated as inner containers
    */
-  const clean = (val: any, parentKey?: string, isTopLevel: boolean = false): any => {
+  const clean = (val: any, parentKey?: string, isTopLevel: boolean = false, forceInner: boolean = false): any => {
     if (Array.isArray(val)) {
-      return val.map(item => clean(item, parentKey, isTopLevel)).filter(item => {
+      // For arrays, we clean items and filter out nulls
+      return val.map(item => clean(item, parentKey, isTopLevel, forceInner)).filter(item => {
         if (item === null || item === undefined) {
           removedCount++;
           return false;
@@ -67,23 +70,31 @@ export const compressElementorJSON = (
       const cleanedObj: any = {};
       let shouldAddFlexAlign = false;
       
-      // Flags for current node type
-      const isTextEditor = val.widgetType === 'text-editor';
       const isContainer = val.elType === 'container';
+      const isTextEditor = val.widgetType === 'text-editor';
+      const isIconBox = val.widgetType === 'icon-box';
       
-      // A Section Holder is a container that is NOT inner and IS top-level (direct descendant of root)
-      const isSectionHolder = isContainer && val.isInner === false && isTopLevel;
+      // Determination of Section Holder:
+      // Must be top-level (direct descendant of root), a container, isInner must be false, AND we haven't found one yet.
+      let isThisSectionHolder = false;
+      if (isTopLevel && isContainer && val.isInner === false && !sectionHolderFound) {
+        isThisSectionHolder = true;
+        sectionHolderFound = true;
+      }
+
+      // Determination of "Acting as Inner":
+      // If forceInner is true OR it already says it's inner OR it's a container that isn't the primary section holder.
+      const actingAsInner = forceInner || (isContainer && !isThisSectionHolder);
 
       for (const key in val) {
         let value = val[key];
         
-        // Rule: Remove nodes starting with motion_fx_ if enabled
+        // General Removal Rules
         if (options.removeMotionFX && key.startsWith('motion_fx_')) {
           removedCount++;
           continue;
         }
 
-        // RTLize Specific Removals
         if (options.rtlize) {
           if (key === 'uich_custom_css_field') {
             removedCount++;
@@ -95,31 +106,41 @@ export const compressElementorJSON = (
           }
         }
 
-        // Rule: Find nodes named "_element_width" and set their value to empty string
         if (key === '_element_width') {
           cleanedObj[key] = "";
           continue;
         }
 
-        // Rule: Remove _element_custom_width and _element_custom_width_tablet, track if we should add flex-start
         if (key === '_element_custom_width' || key === '_element_custom_width_tablet') {
           shouldAddFlexAlign = true;
           removedCount++;
           continue;
         }
 
-        // Specific check for redundant Elementor property structures (empty size/sizes)
         if (isRedundantElementorObject(value)) {
           removedCount++;
           continue;
         }
 
-        // Recursively clean children. Recursive calls are NEVER top-level section holders.
-        let cleanedValue = clean(value, key, false);
+        // Logic for identifying children hierarchy:
+        // If this current element is the Section Holder, all its descendants should be forced as inner.
+        let childForceInner = forceInner;
+        if (isThisSectionHolder && (key === 'elements' || key === 'settings')) {
+          childForceInner = true;
+        }
+
+        // --- Forced isInner overwrite ---
+        // If this is a container and it's acting as inner, force the "isInner" property to true in the output
+        if (key === 'isInner' && isContainer && actingAsInner) {
+          cleanedObj[key] = true;
+          continue;
+        }
+
+        let cleanedValue = clean(value, key, false, childForceInner);
 
         // --- RTLize Logic Start ---
         if (options.rtlize) {
-          // Rule: Under setting node, if flex_direction is "row", change to "row-reverse"
+          // General Row mirroring: Under setting node, if flex_direction is "row", change to "row-reverse"
           if (parentKey === 'settings' && key === 'flex_direction' && cleanedValue === 'row') {
             cleanedValue = 'row-reverse';
           }
@@ -129,20 +150,20 @@ export const compressElementorJSON = (
             cleanedValue['align'] = 'start';
           }
 
-          // Rule: Inner container logic
-          if (isContainer && val.isInner === true && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
+          // Rule: RTLize for icon-box alignment
+          if (isIconBox && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
+            cleanedValue['text_align'] = 'start';
+          }
+
+          // Rule: Inner container logic (applied to anything acting as inner)
+          if (isContainer && actingAsInner && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
             cleanedValue['flex_size'] = 'none';
           }
 
-          // Rule: RTLize for SECTION HOLDERS ONLY (the very first ancestors)
-          if (isSectionHolder && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
-            // Set content_width to full
+          // Rule: SECTION HOLDER SPECIFIC Rules
+          if (isThisSectionHolder && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
             cleanedValue['content_width'] = 'full';
-            
-            // Set width structure
             cleanedValue['width'] = { "unit": "%", "size": "", "sizes": [] };
-            
-            // Set margin structure
             cleanedValue['margin'] = {
               "unit": "px",
               "isLinked": false,
@@ -151,11 +172,7 @@ export const compressElementorJSON = (
               "bottom": "0",
               "left": "0"
             };
-
-            // Force flex_direction to row-reverse
             cleanedValue['flex_direction'] = 'row-reverse';
-
-            // Handle _element_id from _title
             if (cleanedValue['_title']) {
               cleanedValue['_element_id'] = sanitizeToId(cleanedValue['_title']);
             }
@@ -163,13 +180,11 @@ export const compressElementorJSON = (
         }
         // --- RTLize Logic End ---
 
-        // Filter out useless properties
         if (cleanedValue === null || cleanedValue === undefined) {
           removedCount++;
           continue;
         }
 
-        // Skip empty objects unless they are vital structures
         if (typeof cleanedValue === 'object' && !Array.isArray(cleanedValue) && Object.keys(cleanedValue).length === 0) {
           if (key !== 'settings' && key !== 'elements') {
             removedCount++;
@@ -180,7 +195,11 @@ export const compressElementorJSON = (
         cleanedObj[key] = cleanedValue;
       }
 
-      // Rule: Add "_flex_align_self": "flex-start" if custom widths were removed in this block
+      // If isInner key was missing but it's a container that should be forced inner, we add it.
+      if (isContainer && actingAsInner && !('isInner' in cleanedObj)) {
+        cleanedObj['isInner'] = true;
+      }
+
       if (shouldAddFlexAlign) {
         cleanedObj['_flex_align_self'] = 'flex-start';
       }
@@ -191,9 +210,9 @@ export const compressElementorJSON = (
     return val;
   };
 
-  // Start cleaning from the root, marking the direct children as top-level section holders
+  // Entry point: process as top-level
   return {
-    cleaned: clean(obj, undefined, true),
+    cleaned: clean(obj, undefined, true, false),
     removedCount
   };
 };

@@ -284,7 +284,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">v1.9.1: Clipboard Power & Immersive UI</p>
+            <p className="text-xs text-[#8b949e]">v2.3.0: Icon Box RTL & Hierarchy Refinement</p>
           </div>
         </div>
         
@@ -460,7 +460,7 @@ const App: React.FC = () => {
       <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-[#f0f6fc]">Elementor Compressor</span>
-          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v1.9.1</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v2.3.0</span>
           <span className="text-[10px] text-[#8b949e] hidden sm:inline ml-2">Built by amirhp.com</span>
         </div>
         <div className="flex items-center gap-4">
