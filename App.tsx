@@ -58,6 +58,15 @@ const App: React.FC = () => {
   const editorRef = useRef<any>(null);
   const toastTimeoutRef = useRef<any>(null);
 
+  // Sync clear: when input is empty, clear everything else
+  useEffect(() => {
+    if (!inputJSON.trim()) {
+      setOutputJSON('');
+      setStats(null);
+      setError(null);
+    }
+  }, [inputJSON]);
+
   // Compressor Settings with LocalStorage persistence
   const [options, setOptions] = useState<CompressorOptions>(() => {
     const saved = localStorage.getItem('elementor_compressor_settings');
@@ -110,7 +119,7 @@ const App: React.FC = () => {
       playSuccessSound();
       toastTimeoutRef.current = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 2000);
     }
-    // If not success (error), we don't set a timeout, making it persistent until clicked
+    // If error, no timeout is set, making it persistent until dismissed by click
   }, []);
 
   const closeToast = () => {
@@ -184,7 +193,7 @@ const App: React.FC = () => {
               performConversion(formatted);
             }
           } catch (e) {
-            // If it's not valid JSON, just set the raw value
+            
             setInputJSON(val);
             if (options.autoConvertOnPaste) {
               performConversion(val);
@@ -205,9 +214,7 @@ const App: React.FC = () => {
       const text = await navigator.clipboard.readText();
       if (text) {
         setInputJSON(text);
-        if (options.autoConvertOnPaste) {
-          performConversion(text);
-        }
+        performConversion(text);
       }
     } catch (err) {
       showToast(false, 'Clipboard access denied');
@@ -277,7 +284,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">v1.9.0: Clipboard Power & Immersive UI</p>
+            <p className="text-xs text-[#8b949e]">v1.9.1: Clipboard Power & Immersive UI</p>
           </div>
         </div>
         
@@ -302,6 +309,7 @@ const App: React.FC = () => {
               label="Auto Convert" 
               checked={options.autoConvertOnPaste} 
               onChange={val => setOptions(prev => ({...prev, autoConvertOnPaste: val}))} 
+              description="On Paste"
             />
           </div>
 
@@ -452,7 +460,7 @@ const App: React.FC = () => {
       <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-[#f0f6fc]">Elementor Compressor</span>
-          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v1.9.0</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v1.9.1</span>
           <span className="text-[10px] text-[#8b949e] hidden sm:inline ml-2">Built by amirhp.com</span>
         </div>
         <div className="flex items-center gap-4">
@@ -488,7 +496,7 @@ const App: React.FC = () => {
             ) : (
               <div className="px-4 py-2 bg-red-900/20 rounded-lg border border-red-500/30 text-xs text-red-400 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4" />
-                <span>Click anywhere on this card to dismiss</span>
+                <span>Persistent Error: Click to dismiss</span>
               </div>
             )}
           </div>

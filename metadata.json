@@ -1,6 +1,6 @@
 {
   "name": "Elementor Compressor",
-  "version": "1.9.0",
-  "description": "v1.9.0: Persistent error toasts, new Auto-Convert & Copy toggle, and UI refinements.",
+  "version": "1.9.1",
+  "description": "v1.9.1: Refined RTLize rules for top-level containers, persistent error toasts, and sync-clear functionality.",
   "requestFramePermissions": []
 }

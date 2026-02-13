@@ -14,7 +14,6 @@ const sanitizeToId = (str: string): string => {
 /**
  * Deeply cleans an Elementor JSON object based on specific optimization rules.
  */
-// Fix: Added missing autoConvertOnPaste property to default options to satisfy CompressorOptions type
 export const compressElementorJSON = (
   obj: any, 
   options: CompressorOptions = { rtlize: false, removeMotionFX: false, autoFormatOnPaste: true, autoConvertOnPaste: true }
@@ -47,9 +46,15 @@ export const compressElementorJSON = (
     return false;
   };
 
-  const clean = (val: any, parentKey?: string): any => {
+  /**
+   * Recursive cleaner
+   * @param val Value to clean
+   * @param parentKey Key of the parent property
+   * @param isTopLevel Whether this node is a direct child of the root (section holder)
+   */
+  const clean = (val: any, parentKey?: string, isTopLevel: boolean = false): any => {
     if (Array.isArray(val)) {
-      return val.map(item => clean(item, parentKey)).filter(item => {
+      return val.map(item => clean(item, parentKey, isTopLevel)).filter(item => {
         if (item === null || item === undefined) {
           removedCount++;
           return false;
@@ -65,8 +70,9 @@ export const compressElementorJSON = (
       // Flags for current node type
       const isTextEditor = val.widgetType === 'text-editor';
       const isContainer = val.elType === 'container';
-      const isMainContainer = isContainer && val.isInner === false;
-      const isInnerContainer = isContainer && val.isInner === true;
+      
+      // A Section Holder is a container that is NOT inner and IS top-level (direct descendant of root)
+      const isSectionHolder = isContainer && val.isInner === false && isTopLevel;
 
       for (const key in val) {
         let value = val[key];
@@ -108,7 +114,8 @@ export const compressElementorJSON = (
           continue;
         }
 
-        let cleanedValue = clean(value, key);
+        // Recursively clean children. Recursive calls are NEVER top-level section holders.
+        let cleanedValue = clean(value, key, false);
 
         // --- RTLize Logic Start ---
         if (options.rtlize) {
@@ -123,12 +130,12 @@ export const compressElementorJSON = (
           }
 
           // Rule: Inner container logic
-          if (isInnerContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
+          if (isContainer && val.isInner === true && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
             cleanedValue['flex_size'] = 'none';
           }
 
-          // Rule: RTLize for main containers (elType: container, isInner: false)
-          if (isMainContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
+          // Rule: RTLize for SECTION HOLDERS ONLY (the very first ancestors)
+          if (isSectionHolder && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
             // Set content_width to full
             cleanedValue['content_width'] = 'full';
             
@@ -162,8 +169,7 @@ export const compressElementorJSON = (
           continue;
         }
 
-        // Additional check: if it's an object that became empty after cleaning, skip it
-        // Keep essential containers like 'settings' and 'elements' even if temporarily empty
+        // Skip empty objects unless they are vital structures
         if (typeof cleanedValue === 'object' && !Array.isArray(cleanedValue) && Object.keys(cleanedValue).length === 0) {
           if (key !== 'settings' && key !== 'elements') {
             removedCount++;
@@ -185,8 +191,9 @@ export const compressElementorJSON = (
     return val;
   };
 
+  // Start cleaning from the root, marking the direct children as top-level section holders
   return {
-    cleaned: clean(obj),
+    cleaned: clean(obj, undefined, true),
     removedCount
   };
 };
