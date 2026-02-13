@@ -1,4 +1,3 @@
-
 import { CompressorOptions } from '../types';
 
 /**
@@ -38,6 +37,9 @@ export const compressElementorJSON = (
     if (val !== null && typeof val === 'object') {
       const cleanedObj: any = {};
       let shouldAddFlexAlign = false;
+      
+      // Determine if this is a widget and if it's a text-editor
+      const isTextEditor = val.widgetType === 'text-editor';
 
       for (const key in val) {
         let value = val[key];
@@ -61,7 +63,7 @@ export const compressElementorJSON = (
           continue;
         }
 
-        // Specific check for redundant Elementor property structures
+        // Specific check for redundant Elementor property structures (empty size/sizes)
         if (isRedundantElementorObject(value)) {
           removedCount++;
           continue;
@@ -74,6 +76,12 @@ export const compressElementorJSON = (
           cleanedValue = 'row-reverse';
         }
 
+        // Rule: RTLize for text-editor alignment
+        // If we are currently processing the "settings" key of a "text-editor" widget
+        if (options.rtlize && isTextEditor && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
+          cleanedValue['align'] = 'start';
+        }
+
         // Filter out useless properties
         if (cleanedValue === null || cleanedValue === undefined) {
           removedCount++;
@@ -81,6 +89,7 @@ export const compressElementorJSON = (
         }
 
         // Additional check: if it's an object that became empty after cleaning, skip it
+        // Keep essential containers like 'settings' and 'elements' even if temporarily empty
         if (typeof cleanedValue === 'object' && !Array.isArray(cleanedValue) && Object.keys(cleanedValue).length === 0) {
           if (key !== 'settings' && key !== 'elements') {
             removedCount++;
