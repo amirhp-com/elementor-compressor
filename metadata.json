@@ -1,0 +1,5 @@
+{
+  "name": "Elementor Compressor",
+  "description": "A high-performance utility to compress Elementor JSON files by removing redundant properties, empty sizes, and useless metadata while preserving functionality.",
+  "requestFramePermissions": []
+}
