@@ -1,18 +1,17 @@
 
+import { CompressorOptions } from '../types';
+
 /**
- * Deeply cleans an Elementor JSON object.
- * Rules:
- * 1. Removes objects that have an empty "size" and empty "sizes" array.
- * 2. Removes empty strings.
- * 3. Removes properties that are null or undefined.
- * 4. Recursively cleans settings and elements.
+ * Deeply cleans an Elementor JSON object based on specific optimization rules.
  */
-export const compressElementorJSON = (obj: any): { cleaned: any; removedCount: number } => {
+export const compressElementorJSON = (
+  obj: any, 
+  options: CompressorOptions = { rtlize: false, removeMotionFX: false }
+): { cleaned: any; removedCount: number } => {
   let removedCount = 0;
 
   const isRedundantElementorObject = (val: any): boolean => {
     if (val && typeof val === 'object' && !Array.isArray(val)) {
-      // Check for the specific typography/unit pattern requested
       const hasSize = 'size' in val;
       const hasSizes = 'sizes' in val;
       if (hasSize && hasSizes) {
@@ -20,47 +19,69 @@ export const compressElementorJSON = (obj: any): { cleaned: any; removedCount: n
           return true;
         }
       }
-      
-      // Check for empty objects after cleaning
       if (Object.keys(val).length === 0) return true;
     }
     return false;
   };
 
-  const clean = (val: any): any => {
+  const clean = (val: any, parentKey?: string): any => {
     if (Array.isArray(val)) {
-      const newArr = val.map(item => clean(item)).filter(item => {
-        if (item === "" || item === null || item === undefined) {
+      return val.map(item => clean(item, parentKey)).filter(item => {
+        if (item === null || item === undefined) {
           removedCount++;
           return false;
         }
         return true;
       });
-      return newArr;
     }
 
     if (val !== null && typeof val === 'object') {
       const cleanedObj: any = {};
+      let shouldAddFlexAlign = false;
+
       for (const key in val) {
-        const value = val[key];
+        let value = val[key];
         
+        // Rule: Remove nodes starting with motion_fx_ if enabled
+        if (options.removeMotionFX && key.startsWith('motion_fx_')) {
+          removedCount++;
+          continue;
+        }
+
+        // Rule: Find nodes named "_element_width" and set their value to empty string
+        if (key === '_element_width') {
+          cleanedObj[key] = "";
+          continue;
+        }
+
+        // Rule: Remove _element_custom_width and _element_custom_width_tablet, track if we should add flex-start
+        if (key === '_element_custom_width' || key === '_element_custom_width_tablet') {
+          shouldAddFlexAlign = true;
+          removedCount++;
+          continue;
+        }
+
         // Specific check for redundant Elementor property structures
         if (isRedundantElementorObject(value)) {
           removedCount++;
           continue;
         }
 
-        const cleanedValue = clean(value);
+        let cleanedValue = clean(value, key);
+
+        // Rule: RTLize - Under setting node, if flex_direction is "row", change to "row-reverse"
+        if (options.rtlize && parentKey === 'settings' && key === 'flex_direction' && cleanedValue === 'row') {
+          cleanedValue = 'row-reverse';
+        }
 
         // Filter out useless properties
-        if (cleanedValue === "" || cleanedValue === null || cleanedValue === undefined) {
+        if (cleanedValue === null || cleanedValue === undefined) {
           removedCount++;
           continue;
         }
 
         // Additional check: if it's an object that became empty after cleaning, skip it
         if (typeof cleanedValue === 'object' && !Array.isArray(cleanedValue) && Object.keys(cleanedValue).length === 0) {
-          // Special case: don't remove empty "settings" or "elements" as they define the structure
           if (key !== 'settings' && key !== 'elements') {
             removedCount++;
             continue;
@@ -69,6 +90,12 @@ export const compressElementorJSON = (obj: any): { cleaned: any; removedCount: n
 
         cleanedObj[key] = cleanedValue;
       }
+
+      // Rule: Add "_flex_align_self": "flex-start" if custom widths were removed in this block
+      if (shouldAddFlexAlign) {
+        cleanedObj['_flex_align_self'] = 'flex-start';
+      }
+
       return cleanedObj;
     }
 

@@ -11,11 +11,12 @@ import {
   Globe,
   Github,
   Check,
-  AlertCircle
+  AlertCircle,
+  Settings2
 } from 'lucide-react';
 import { JsonEditor } from './components/JsonEditor';
 import { compressElementorJSON, formatByteSize } from './utils/compressor';
-import { CompressorStats } from './types';
+import { CompressorStats, CompressorOptions } from './types';
 
 const App: React.FC = () => {
   const [inputJSON, setInputJSON] = useState<string>('');
@@ -24,6 +25,12 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [error, setError] = useState<string | null>(null);
+
+  // Compressor Settings
+  const [options, setOptions] = useState<CompressorOptions>({
+    rtlize: false,
+    removeMotionFX: false
+  });
 
   const handleCompress = useCallback(() => {
     if (!inputJSON.trim()) return;
@@ -34,7 +41,7 @@ const App: React.FC = () => {
       const parsed = JSON.parse(inputJSON);
       const originalBytes = new TextEncoder().encode(inputJSON).length;
       
-      const { cleaned, removedCount } = compressElementorJSON(parsed);
+      const { cleaned, removedCount } = compressElementorJSON(parsed, options);
       const compressed = JSON.stringify(cleaned, null, 2);
       const compressedBytes = new TextEncoder().encode(compressed).length;
 
@@ -50,9 +57,8 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [inputJSON]);
+  }, [inputJSON, options]);
 
-  // Handle Ctrl+Enter / Cmd+Enter
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -110,26 +116,48 @@ const App: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'elementor-compressed.json';
+    a.download = 'elementor-optimized.json';
     a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="flex flex-col min-h-screen font-sans">
+    <div className="flex flex-col min-h-screen font-sans bg-[#0d1117] text-[#c9d1d9]">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#161b22] border-b border-[#30363d] px-6 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-[#161b22] border-b border-[#30363d] px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg">
+          <div className="bg-[#1f6feb] p-2 rounded-lg">
             <Maximize2 className="w-5 h-5 text-white" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">Optimize widgets by removing redundant meta properties</p>
+            <p className="text-xs text-[#8b949e]">V2: Optimized logic + Monaco Editor</p>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
+          {/* Options Toggles */}
+          <div className="hidden xl:flex items-center gap-6 px-4 border-r border-[#30363d] mr-2">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                checked={options.rtlize} 
+                onChange={e => setOptions(prev => ({...prev, rtlize: e.target.checked}))}
+                className="w-4 h-4 rounded border-[#30363d] bg-[#0d1117] text-[#1f6feb] focus:ring-offset-0 focus:ring-0"
+              />
+              <span className="text-sm font-medium text-[#8b949e] group-hover:text-[#c9d1d9] transition-colors">RTLize</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                checked={options.removeMotionFX} 
+                onChange={e => setOptions(prev => ({...prev, removeMotionFX: e.target.checked}))}
+                className="w-4 h-4 rounded border-[#30363d] bg-[#0d1117] text-[#1f6feb] focus:ring-offset-0 focus:ring-0"
+              />
+              <span className="text-sm font-medium text-[#8b949e] group-hover:text-[#c9d1d9] transition-colors">Remove MotionFX</span>
+            </label>
+          </div>
+
           <label className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] text-sm cursor-pointer transition-all">
             <Upload className="w-4 h-4" />
             <span>Load JSON</span>
@@ -141,7 +169,7 @@ const App: React.FC = () => {
             className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-[#238636] hover:bg-[#2ea043] disabled:bg-[#238636]/50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-sm"
           >
             <Zap className={`w-4 h-4 ${isProcessing ? 'animate-pulse' : ''}`} />
-            <span>{isProcessing ? 'Compressing...' : 'Convert'}</span>
+            <span>{isProcessing ? 'Optimizing...' : 'Convert'}</span>
             <span className="text-[10px] opacity-70 bg-black/20 px-1.5 rounded ml-1 hidden sm:inline">⌘↵</span>
           </button>
         </div>
@@ -162,13 +190,38 @@ const App: React.FC = () => {
               <button onClick={() => setInputJSON('')} className="p-1.5 text-[#8b949e] hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
             </div>
           </div>
-          <div className="flex-1">
+
+          <div className="flex-1 min-h-0">
             <JsonEditor 
               value={inputJSON} 
               onChange={setInputJSON} 
-              placeholder='Paste your Elementor JSON here...'
+              placeholder='Paste your raw Elementor JSON here...'
             />
           </div>
+
+          {/* Settings Section (Mobile/Responsive) */}
+          <div className="xl:hidden flex flex-wrap items-center gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md">
+            <div className="flex items-center gap-2 text-xs text-[#8b949e] font-bold uppercase"><Settings2 className="w-3.5 h-3.5" /> Options</div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={options.rtlize} 
+                onChange={e => setOptions(prev => ({...prev, rtlize: e.target.checked}))}
+                className="w-3.5 h-3.5 rounded border-[#30363d] bg-[#0d1117]"
+              />
+              <span className="text-xs">RTLize</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={options.removeMotionFX} 
+                onChange={e => setOptions(prev => ({...prev, removeMotionFX: e.target.checked}))}
+                className="w-3.5 h-3.5 rounded border-[#30363d] bg-[#0d1117]"
+              />
+              <span className="text-xs">Remove MotionFX</span>
+            </label>
+          </div>
+
           {error && (
             <div className="flex items-center gap-2 p-3 text-sm bg-red-900/20 border border-red-500/30 text-red-400 rounded-md">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -206,7 +259,7 @@ const App: React.FC = () => {
               </button>
             </div>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-h-0">
             <JsonEditor 
               value={outputJSON} 
               readOnly 
@@ -226,7 +279,7 @@ const App: React.FC = () => {
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] text-[#8b949e] uppercase font-bold tracking-widest">Reduction</span>
-                <span className="text-sm font-semibold text-blue-400">{stats.reductionPercentage.toFixed(1)}%</span>
+                <span className="text-sm font-semibold text-[#1f6feb]">{stats.reductionPercentage.toFixed(1)}%</span>
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] text-[#8b949e] uppercase font-bold tracking-widest">Removed Keys</span>
@@ -243,14 +296,11 @@ const App: React.FC = () => {
           <div className="space-y-2">
             <div className="flex items-center justify-center sm:justify-start gap-2 text-[#f0f6fc] font-bold">
               <span>Elementor Compressor</span>
-              <span className="px-2 py-0.5 rounded-full bg-[#1f6feb] text-[10px]">v1.0.0</span>
+              <span className="px-2 py-0.5 rounded-full bg-[#1f6feb] text-[10px]">v2.0.0</span>
             </div>
             <p className="text-sm text-[#8b949e]">
               Built by <a href="https://amirhp.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">AmirhpCom</a>. 
-              Optimize your WordPress workflow by shedding useless meta weight.
-            </p>
-            <p className="text-[10px] text-[#484f58] italic">
-              Disclaimer: This tool is intended for performance optimization. Always backup your JSON files before using compressed results in production.
+              High-performance JSON optimization.
             </p>
           </div>
 

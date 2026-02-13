@@ -1,4 +1,9 @@
 
+export interface CompressorOptions {
+  rtlize: boolean;
+  removeMotionFX: boolean;
+}
+
 export interface CompressorStats {
   originalSize: number;
   compressedSize: number;

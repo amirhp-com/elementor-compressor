@@ -1,50 +1,44 @@
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
+import Editor from '@monaco-editor/react';
 import { EditorProps } from '../types';
 
-// Declare Prism globally to avoid import issues in this environment
-declare const Prism: any;
-
 export const JsonEditor: React.FC<EditorProps> = ({ value, onChange, readOnly, placeholder }) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const preRef = useRef<HTMLPreElement>(null);
-  const codeRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (codeRef.current) {
-      codeRef.current.textContent = value;
-      Prism.highlightElement(codeRef.current);
-    }
-  }, [value]);
-
-  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
-    if (preRef.current) {
-      preRef.current.scrollTop = e.currentTarget.scrollTop;
-      preRef.current.scrollLeft = e.currentTarget.scrollLeft;
-    }
-  };
-
   return (
     <div className="relative w-full h-full font-mono text-sm overflow-hidden bg-[#0d1117] rounded-md border border-[#30363d] focus-within:border-[#58a6ff] transition-colors">
-      <textarea
-        ref={textareaRef}
+      <Editor
+        height="100%"
+        defaultLanguage="json"
+        theme="vs-dark"
         value={value}
-        onChange={(e) => onChange?.(e.target.value)}
-        onScroll={handleScroll}
-        readOnly={readOnly}
-        placeholder={placeholder}
-        className="absolute inset-0 w-full h-full p-4 bg-transparent text-transparent caret-white resize-none z-10 selection:bg-blue-500/30"
-        spellCheck={false}
+        onChange={(val) => onChange?.(val || '')}
+        options={{
+          readOnly,
+          minimap: { enabled: false },
+          fontSize: 13,
+          lineNumbers: 'on',
+          scrollBeyondLastLine: false,
+          automaticLayout: true,
+          padding: { top: 16, bottom: 16 },
+          wordWrap: 'on',
+          formatOnPaste: true,
+          renderLineHighlight: 'all',
+          cursorBlinking: 'smooth',
+          scrollbar: {
+            vertical: 'visible',
+            horizontal: 'visible',
+            useShadows: false,
+            verticalScrollbarSize: 10,
+            horizontalScrollbarSize: 10
+          }
+        }}
+        loading={<div className="flex items-center justify-center h-full text-[#8b949e]">Initializing Editor...</div>}
       />
-      <pre
-        ref={preRef}
-        className="absolute inset-0 w-full h-full p-4 m-0 pointer-events-none overflow-hidden whitespace-pre-wrap break-all"
-        aria-hidden="true"
-      >
-        <code ref={codeRef} className="language-json">
-          {value}
-        </code>
-      </pre>
+      {!value && placeholder && (
+        <div className="absolute top-4 left-[54px] pointer-events-none text-[#484f58] select-none">
+          {placeholder}
+        </div>
+      )}
     </div>
   );
 };
