@@ -64,7 +64,8 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : {
       rtlize: false,
       removeMotionFX: false,
-      autoFormatOnPaste: true
+      autoFormatOnPaste: true,
+      autoConvertOnPaste: true
     };
   });
 
@@ -105,8 +106,11 @@ const App: React.FC = () => {
   const showToast = useCallback((success: boolean, message: string) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToast({ show: true, success, message });
-    if (success) playSuccessSound();
-    toastTimeoutRef.current = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 2000);
+    if (success) {
+      playSuccessSound();
+      toastTimeoutRef.current = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 2000);
+    }
+    // If not success (error), we don't set a timeout, making it persistent until clicked
   }, []);
 
   const closeToast = () => {
@@ -170,15 +174,27 @@ const App: React.FC = () => {
 
     editor.onDidPaste(() => {
       setTimeout(() => {
-        try {
-          const val = editor.getValue();
-          const obj = JSON.parse(val);
-          const formatted = JSON.stringify(obj, null, 2);
-          setInputJSON(formatted);
-          // Run conversion and copy automatically on paste
-          performConversion(formatted);
-        } catch (e) {
-          // Not valid JSON yet, skip auto-format and auto-convert
+        const val = editor.getValue();
+        if (options.autoFormatOnPaste) {
+          try {
+            const obj = JSON.parse(val);
+            const formatted = JSON.stringify(obj, null, 2);
+            setInputJSON(formatted);
+            if (options.autoConvertOnPaste) {
+              performConversion(formatted);
+            }
+          } catch (e) {
+            // If it's not valid JSON, just set the raw value
+            setInputJSON(val);
+            if (options.autoConvertOnPaste) {
+              performConversion(val);
+            }
+          }
+        } else {
+          setInputJSON(val);
+          if (options.autoConvertOnPaste) {
+            performConversion(val);
+          }
         }
       }, 100);
     });
@@ -189,7 +205,9 @@ const App: React.FC = () => {
       const text = await navigator.clipboard.readText();
       if (text) {
         setInputJSON(text);
-        performConversion(text);
+        if (options.autoConvertOnPaste) {
+          performConversion(text);
+        }
       }
     } catch (err) {
       showToast(false, 'Clipboard access denied');
@@ -232,7 +250,9 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       const result = event.target?.result as string;
       setInputJSON(result);
-      performConversion(result);
+      if (options.autoConvertOnPaste) {
+        performConversion(result);
+      }
     };
     reader.readAsText(file);
   };
@@ -257,7 +277,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">v1.8.1: Smart Clipboard & Immersive UI</p>
+            <p className="text-xs text-[#8b949e]">v1.9.0: Clipboard Power & Immersive UI</p>
           </div>
         </div>
         
@@ -277,7 +297,11 @@ const App: React.FC = () => {
               label="Auto Format" 
               checked={options.autoFormatOnPaste} 
               onChange={val => setOptions(prev => ({...prev, autoFormatOnPaste: val}))} 
-              description="On Paste"
+            />
+            <Switch 
+              label="Auto Convert" 
+              checked={options.autoConvertOnPaste} 
+              onChange={val => setOptions(prev => ({...prev, autoConvertOnPaste: val}))} 
             />
           </div>
 
@@ -310,10 +334,10 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <button 
                 onClick={handlePasteFromClipboard} 
-                className="flex items-center gap-1.5 px-2 py-1 text-xs text-[#c9d1d9] bg-[#21262d] border border-[#30363d] rounded hover:bg-[#30363d] transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1 text-xs text-[#c9d1d9] bg-[#1f6feb] border border-[#1f6feb] rounded-md hover:bg-[#388bfd] transition-colors font-semibold"
               >
                 <ClipboardPaste className="w-3.5 h-3.5" />
-                Paste
+                Paste & Optimize
               </button>
               <button onClick={() => handlePrettify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors">Prettify</button>
               <button onClick={() => handleMinify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors">Minify</button>
@@ -333,7 +357,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Settings Section (Mobile/Responsive) */}
-          <div className="xl:hidden grid grid-cols-2 gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md">
+          <div className="xl:hidden grid grid-cols-2 gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md overflow-y-auto max-h-32">
             <Switch 
               label="RTLize" 
               checked={options.rtlize} 
@@ -345,9 +369,14 @@ const App: React.FC = () => {
               onChange={val => setOptions(prev => ({...prev, removeMotionFX: val}))} 
             />
              <Switch 
-              label="Auto Format" 
+              label="Format" 
               checked={options.autoFormatOnPaste} 
               onChange={val => setOptions(prev => ({...prev, autoFormatOnPaste: val}))} 
+            />
+            <Switch 
+              label="Auto Convert" 
+              checked={options.autoConvertOnPaste} 
+              onChange={val => setOptions(prev => ({...prev, autoConvertOnPaste: val}))} 
             />
           </div>
 
@@ -423,7 +452,7 @@ const App: React.FC = () => {
       <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-[#f0f6fc]">Elementor Compressor</span>
-          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v1.8.1</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v1.9.0</span>
           <span className="text-[10px] text-[#8b949e] hidden sm:inline ml-2">Built by amirhp.com</span>
         </div>
         <div className="flex items-center gap-4">
@@ -440,7 +469,7 @@ const App: React.FC = () => {
           {/* Toast Card with high contrast and deep shadow */}
           <div 
             onClick={closeToast}
-            className="relative bg-[#161b22] border border-[#30363d] rounded-2xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-300 transform scale-100 shadow-[0_0_50px_rgba(0,0,0,0.8)] pointer-events-auto cursor-pointer hover:border-[#58a6ff] transition-all"
+            className={`relative bg-[#161b22] border ${toast.success ? 'border-[#30363d]' : 'border-red-500/50'} rounded-2xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-300 transform scale-100 shadow-[0_0_50px_rgba(0,0,0,0.8)] pointer-events-auto cursor-pointer transition-all hover:scale-105`}
           >
             <div className={`p-6 rounded-full ${toast.success ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'} scale-125 shadow-inner`}>
               {toast.success ? <Sparkles className="w-12 h-12" /> : <XCircle className="w-12 h-12" />}
@@ -451,10 +480,15 @@ const App: React.FC = () => {
               </h2>
               <p className="text-[#c9d1d9] text-lg font-medium max-w-xs">{toast.message}</p>
             </div>
-            {toast.success && (
+            {toast.success ? (
               <div className="px-4 py-2 bg-[#21262d] rounded-lg border border-[#30363d] text-sm text-[#8b949e] flex items-center gap-2">
                 <Check className="w-4 h-4 text-green-400" />
                 <span>Ready to use in Elementor</span>
+              </div>
+            ) : (
+              <div className="px-4 py-2 bg-red-900/20 rounded-lg border border-red-500/30 text-xs text-red-400 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                <span>Click anywhere on this card to dismiss</span>
               </div>
             )}
           </div>

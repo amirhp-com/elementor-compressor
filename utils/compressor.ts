@@ -14,10 +14,10 @@ const sanitizeToId = (str: string): string => {
 /**
  * Deeply cleans an Elementor JSON object based on specific optimization rules.
  */
-// Fix: Added missing autoFormatOnPaste property to default options to satisfy CompressorOptions type
+// Fix: Added missing autoConvertOnPaste property to default options to satisfy CompressorOptions type
 export const compressElementorJSON = (
   obj: any, 
-  options: CompressorOptions = { rtlize: false, removeMotionFX: false, autoFormatOnPaste: true }
+  options: CompressorOptions = { rtlize: false, removeMotionFX: false, autoFormatOnPaste: true, autoConvertOnPaste: true }
 ): { cleaned: any; removedCount: number } => {
   let removedCount = 0;
 

@@ -1,8 +1,8 @@
-
 export interface CompressorOptions {
   rtlize: boolean;
   removeMotionFX: boolean;
   autoFormatOnPaste: boolean;
+  autoConvertOnPaste: boolean;
 }
 
 export interface CompressorStats {

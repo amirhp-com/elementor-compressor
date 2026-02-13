@@ -1,6 +1,6 @@
 {
   "name": "Elementor Compressor",
-  "version": "1.8.1",
-  "description": "v1.8.1: UI refinement - removed redundant toast hints for a minimal experience.",
+  "version": "1.9.0",
+  "description": "v1.9.0: Persistent error toasts, new Auto-Convert & Copy toggle, and UI refinements.",
   "requestFramePermissions": []
 }
