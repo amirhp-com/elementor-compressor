@@ -1,6 +1,17 @@
 import { CompressorOptions } from '../types';
 
 /**
+ * Sanitizes a string to be used as a valid HTML ID attribute.
+ * Converts spaces, whitespace, dashes, and slashes to underscores and lowercases.
+ */
+const sanitizeToId = (str: string): string => {
+  return str
+    .toLowerCase()
+    .replace(/[\s\-\/]+/g, '_') // Replace spaces, whitespace, dashes, slashes with underscores
+    .replace(/^_+|_+$/g, '');   // Trim leading/trailing underscores
+};
+
+/**
  * Deeply cleans an Elementor JSON object based on specific optimization rules.
  */
 export const compressElementorJSON = (
@@ -38,8 +49,9 @@ export const compressElementorJSON = (
       const cleanedObj: any = {};
       let shouldAddFlexAlign = false;
       
-      // Determine if this is a widget and if it's a text-editor
+      // Flags for current node type
       const isTextEditor = val.widgetType === 'text-editor';
+      const isMainContainer = val.elType === 'container' && val.isInner === false;
 
       for (const key in val) {
         let value = val[key];
@@ -71,16 +83,36 @@ export const compressElementorJSON = (
 
         let cleanedValue = clean(value, key);
 
-        // Rule: RTLize - Under setting node, if flex_direction is "row", change to "row-reverse"
-        if (options.rtlize && parentKey === 'settings' && key === 'flex_direction' && cleanedValue === 'row') {
-          cleanedValue = 'row-reverse';
-        }
+        // --- RTLize Logic Start ---
+        if (options.rtlize) {
+          // Rule: Under setting node, if flex_direction is "row", change to "row-reverse"
+          if (parentKey === 'settings' && key === 'flex_direction' && cleanedValue === 'row') {
+            cleanedValue = 'row-reverse';
+          }
 
-        // Rule: RTLize for text-editor alignment
-        // If we are currently processing the "settings" key of a "text-editor" widget
-        if (options.rtlize && isTextEditor && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
-          cleanedValue['align'] = 'start';
+          // Rule: RTLize for text-editor alignment
+          if (isTextEditor && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
+            cleanedValue['align'] = 'start';
+          }
+
+          // Rule: RTLize for main containers (elType: container, isInner: false)
+          if (isMainContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
+            // Set content_width to full
+            cleanedValue['content_width'] = 'full';
+            
+            // Set width structure
+            cleanedValue['width'] = { "unit": "%", "size": "", "sizes": [] };
+            
+            // Force flex_direction to row-reverse
+            cleanedValue['flex_direction'] = 'row-reverse';
+
+            // Handle _element_id from _title
+            if (cleanedValue['_title']) {
+              cleanedValue['_element_id'] = sanitizeToId(cleanedValue['_title']);
+            }
+          }
         }
+        // --- RTLize Logic End ---
 
         // Filter out useless properties
         if (cleanedValue === null || cleanedValue === undefined) {
