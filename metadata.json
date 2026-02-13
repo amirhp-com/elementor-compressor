@@ -1,6 +1,6 @@
 {
   "name": "Elementor Compressor",
-  "version": "1.4.0",
-  "description": "v1.4: Enhanced RTLize logic with inner container optimization, automatic removal of hover effects, motion FX, sticky settings, and custom CSS fields.",
+  "version": "1.5.0",
+  "description": "v1.5: Full-height UI, iOS-style toggles, persistent settings, auto-format on paste, and immersive success feedback with generated audio.",
   "requestFramePermissions": []
 }

@@ -2,6 +2,7 @@
 export interface CompressorOptions {
   rtlize: boolean;
   removeMotionFX: boolean;
+  autoFormatOnPaste: boolean;
 }
 
 export interface CompressorStats {
@@ -16,4 +17,5 @@ export interface EditorProps {
   onChange?: (value: string) => void;
   readOnly?: boolean;
   placeholder?: string;
+  onMount?: (editor: any, monaco: any) => void;
 }

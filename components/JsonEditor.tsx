@@ -1,9 +1,8 @@
-
 import React from 'react';
 import Editor from '@monaco-editor/react';
 import { EditorProps } from '../types';
 
-export const JsonEditor: React.FC<EditorProps> = ({ value, onChange, readOnly, placeholder }) => {
+export const JsonEditor: React.FC<EditorProps> = ({ value, onChange, readOnly, placeholder, onMount }) => {
   return (
     <div className="relative w-full h-full font-mono text-sm overflow-hidden bg-[#0d1117] rounded-md border border-[#30363d] focus-within:border-[#58a6ff] transition-colors">
       <Editor
@@ -12,6 +11,7 @@ export const JsonEditor: React.FC<EditorProps> = ({ value, onChange, readOnly, p
         theme="vs-dark"
         value={value}
         onChange={(val) => onChange?.(val || '')}
+        onMount={onMount}
         options={{
           readOnly,
           minimap: { enabled: false },
