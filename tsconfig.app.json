@@ -1,4 +1,3 @@
-
 {
   "compilerOptions": {
     "composite": true,
@@ -24,5 +23,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["index.tsx", "App.tsx", "components", "utils", "types.ts"]
+  "include": ["index.tsx", "App.tsx", "components/**/*.tsx", "utils/**/*.ts", "types.ts"]
 }

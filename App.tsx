@@ -7,7 +7,6 @@ import {
   Zap, 
   Trash2, 
   Maximize2, 
-  Minimize2, 
   Upload,
   Globe,
   Github,
