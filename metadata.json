@@ -1,6 +1,6 @@
 {
   "name": "Elementor Compressor",
-  "version": "2.5.0",
-  "description": "v2.5.0: Implemented strict Mother Section (Full Width 100%) vs Nested Container (Boxed, No Width) logic.",
+  "version": "2.6.0",
+  "description": "v2.6.0: Settings Gear, Device-specific Padding for Mother/L2, and complete Margin stripping.",
   "requestFramePermissions": []
 }

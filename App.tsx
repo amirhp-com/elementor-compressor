@@ -13,13 +13,28 @@ import {
   AlertCircle,
   XCircle,
   Sparkles,
-  ClipboardPaste
+  ClipboardPaste,
+  Settings,
+  X,
+  Monitor,
+  Tablet,
+  Smartphone,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
 import { JsonEditor } from './components/JsonEditor';
 import { compressElementorJSON, formatByteSize } from './utils/compressor';
-import { CompressorStats, CompressorOptions } from './types';
+import { CompressorStats, CompressorOptions, DevicePadding, PaddingValues } from './types';
 
-// Helper for iOS-style toggle
+const defaultPadding: PaddingValues = { top: '0', right: '0', bottom: '0', left: '0' };
+const defaultDevicePadding: DevicePadding = {
+  desktop: { ...defaultPadding },
+  tablet: { ...defaultPadding },
+  mobile: { ...defaultPadding }
+};
+
 const Switch = ({ 
   label, 
   checked, 
@@ -46,6 +61,63 @@ const Switch = ({
   </div>
 );
 
+const PaddingGrid = ({ 
+  title, 
+  icon: Icon, 
+  values, 
+  onChange 
+}: { 
+  title: string; 
+  icon: any; 
+  values: PaddingValues; 
+  onChange: (key: keyof PaddingValues, val: string) => void;
+}) => (
+  <div className="space-y-2">
+    <div className="flex items-center gap-2 text-[10px] text-[#8b949e] uppercase font-bold tracking-widest">
+      <Icon className="w-3 h-3" />
+      <span>{title}</span>
+    </div>
+    <div className="grid grid-cols-4 gap-2">
+      <div className="relative">
+        <ArrowUp className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#484f58]" />
+        <input 
+          type="text" 
+          value={values.top} 
+          onChange={(e) => onChange('top', e.target.value)}
+          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none" 
+        />
+      </div>
+      <div className="relative">
+        <ArrowRight className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#484f58]" />
+        <input 
+          type="text" 
+          value={values.right} 
+          onChange={(e) => onChange('right', e.target.value)}
+          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none" 
+        />
+      </div>
+      <div className="relative">
+        <ArrowDown className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#484f58]" />
+        <input 
+          type="text" 
+          value={values.bottom} 
+          onChange={(e) => onChange('bottom', e.target.value)}
+          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none" 
+        />
+      </div>
+      <div className="relative">
+        <ArrowLeft className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#484f58]" />
+        <input 
+          type="text" 
+          value={values.left} 
+          onChange={(e) => onChange('left', e.target.value)}
+          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none" 
+        />
+      </div>
+    </div>
+  </div>
+);
+
 const App: React.FC = () => {
   const [inputJSON, setInputJSON] = useState<string>('');
   const [outputJSON, setOutputJSON] = useState<string>('');
@@ -53,12 +125,12 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<{ show: boolean; success: boolean; message: string }>({ show: false, success: false, message: '' });
   
   const editorRef = useRef<any>(null);
   const toastTimeoutRef = useRef<any>(null);
 
-  // Sync clear: when input is empty, clear everything else
   useEffect(() => {
     if (!inputJSON.trim()) {
       setOutputJSON('');
@@ -67,19 +139,22 @@ const App: React.FC = () => {
     }
   }, [inputJSON]);
 
-  // Compressor Settings with LocalStorage persistence
   const [options, setOptions] = useState<CompressorOptions>(() => {
-    const saved = localStorage.getItem('elementor_compressor_settings');
+    const saved = localStorage.getItem('elementor_compressor_settings_v2');
     return saved ? JSON.parse(saved) : {
       rtlize: false,
       removeMotionFX: false,
       autoFormatOnPaste: true,
-      autoConvertOnPaste: true
+      autoConvertOnPaste: true,
+      applyMotherPadding: true,
+      motherPadding: { ...defaultDevicePadding },
+      applyLevel2Padding: false,
+      level2Padding: { ...defaultDevicePadding }
     };
   });
 
   useEffect(() => {
-    localStorage.setItem('elementor_compressor_settings', JSON.stringify(options));
+    localStorage.setItem('elementor_compressor_settings_v2', JSON.stringify(options));
   }, [options]);
 
   const playSuccessSound = () => {
@@ -87,30 +162,17 @@ const App: React.FC = () => {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
-
       oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
-      oscillator.frequency.exponentialRampToValueAtTime(1046.50, audioCtx.currentTime + 0.1); // C6
-      
+      oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(1046.50, audioCtx.currentTime + 0.1);
       gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-
       oscillator.connect(gainNode);
       gainNode.connect(audioCtx.destination);
-
       oscillator.start();
       oscillator.stop(audioCtx.currentTime + 0.5);
-    } catch (e) {
-      console.warn('Audio playback failed', e);
-    }
+    } catch (e) {}
   };
-
-  const handleCopy = useCallback((text: string) => {
-    if (!text) return;
-    navigator.clipboard.writeText(text);
-    setCopyStatus('copied');
-    setTimeout(() => setCopyStatus('idle'), 2000);
-  }, []);
 
   const showToast = useCallback((success: boolean, message: string) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -121,24 +183,16 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const closeToast = () => {
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    setToast(prev => ({ ...prev, show: false }));
-  };
-
   const performConversion = useCallback((rawJson: string) => {
     if (!rawJson.trim()) return;
     setIsProcessing(true);
     setError(null);
-
     try {
       const parsed = JSON.parse(rawJson);
       const originalBytes = new TextEncoder().encode(rawJson).length;
-      
       const { cleaned, removedCount } = compressElementorJSON(parsed, options);
       const compressed = JSON.stringify(cleaned, null, 2);
       const compressedBytes = new TextEncoder().encode(compressed).length;
-
       setOutputJSON(compressed);
       setStats({
         originalSize: originalBytes,
@@ -146,8 +200,9 @@ const App: React.FC = () => {
         reductionPercentage: originalBytes > 0 ? ((originalBytes - compressedBytes) / originalBytes) * 100 : 0,
         removedKeys: removedCount
       });
-
-      handleCopy(compressed);
+      navigator.clipboard.writeText(compressed);
+      setCopyStatus('copied');
+      setTimeout(() => setCopyStatus('idle'), 2000);
       showToast(true, 'Optimized & Copied to Clipboard!');
     } catch (e: any) {
       setError(`Invalid JSON: ${e.message}`);
@@ -155,53 +210,30 @@ const App: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [options, handleCopy, showToast]);
+  }, [options, showToast]);
 
   const handleCompress = useCallback(() => {
     performConversion(inputJSON);
   }, [inputJSON, performConversion]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleCompress();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleCompress]);
-
   const handleEditorMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
-    
-    // Integrated shortcut for the editor
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      handleCompress();
-    });
-
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => handleCompress());
     editor.onDidPaste(() => {
       setTimeout(() => {
         const val = editor.getValue();
         if (options.autoFormatOnPaste) {
           try {
-            const obj = JSON.parse(val);
-            const formatted = JSON.stringify(obj, null, 2);
+            const formatted = JSON.stringify(JSON.parse(val), null, 2);
             setInputJSON(formatted);
-            if (options.autoConvertOnPaste) {
-              performConversion(formatted);
-            }
+            if (options.autoConvertOnPaste) performConversion(formatted);
           } catch (e) {
             setInputJSON(val);
-            if (options.autoConvertOnPaste) {
-              performConversion(val);
-            }
+            if (options.autoConvertOnPaste) performConversion(val);
           }
         } else {
           setInputJSON(val);
-          if (options.autoConvertOnPaste) {
-            performConversion(val);
-          }
+          if (options.autoConvertOnPaste) performConversion(val);
         }
       }, 100);
     });
@@ -211,120 +243,52 @@ const App: React.FC = () => {
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
-        let finalInputText = text;
+        let final = text;
         if (options.autoFormatOnPaste) {
-          try {
-            const obj = JSON.parse(text);
-            finalInputText = JSON.stringify(obj, null, 2);
-          } catch (e) {
-            // Keep original text if JSON parse fails
+          try { final = JSON.stringify(JSON.parse(text), null, 2); } catch(e){}
+        }
+        setInputJSON(final);
+        performConversion(final);
+      }
+    } catch (err) { showToast(false, 'Clipboard access denied'); }
+  };
+
+  const handleUpdatePadding = (target: 'mother' | 'level2', device: keyof DevicePadding, key: keyof PaddingValues, val: string) => {
+    setOptions(prev => {
+      const padKey = target === 'mother' ? 'motherPadding' : 'level2Padding';
+      return {
+        ...prev,
+        [padKey]: {
+          ...prev[padKey],
+          [device]: {
+            ...prev[padKey][device],
+            [key]: val
           }
         }
-        setInputJSON(finalInputText);
-        performConversion(finalInputText);
       }
-    } catch (err) {
-      showToast(false, 'Clipboard access denied');
-    }
-  };
-
-  const handleClearAll = () => {
-    setInputJSON('');
-    setOutputJSON('');
-    setStats(null);
-    setError(null);
-  };
-
-  const handlePrettify = (target: 'input' | 'output') => {
-    try {
-      const jsonStr = target === 'input' ? inputJSON : outputJSON;
-      if (!jsonStr) return;
-      const obj = JSON.parse(jsonStr);
-      const formatted = JSON.stringify(obj, null, 2);
-      if (target === 'input') setInputJSON(formatted);
-      else setOutputJSON(formatted);
-    } catch (e) {}
-  };
-
-  const handleMinify = (target: 'input' | 'output') => {
-    try {
-      const jsonStr = target === 'input' ? inputJSON : outputJSON;
-      if (!jsonStr) return;
-      const obj = JSON.parse(jsonStr);
-      const minified = JSON.stringify(obj);
-      if (target === 'input') setInputJSON(minified);
-      else setOutputJSON(minified);
-    } catch (e) {}
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      setInputJSON(result);
-      if (options.autoConvertOnPaste) {
-        performConversion(result);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleDownload = () => {
-    const blob = new Blob([outputJSON], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'elementor-optimized.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    });
   };
 
   return (
     <div className="flex flex-col h-screen font-sans bg-[#0d1117] text-[#c9d1d9] overflow-hidden">
-      {/* Header */}
-      <header className="flex-none bg-[#161b22] border-b border-[#30363d] px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
+      <header className="flex-none bg-[#161b22] border-b border-[#30363d] px-6 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
           <div className="bg-[#1f6feb] p-2 rounded-lg">
             <Maximize2 className="w-5 h-5 text-white" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">v2.5.0: Advanced Mother/Child Logic</p>
+            <p className="text-xs text-[#8b949e]">v2.6.0: Settings Panel & Margin/Padding Logic</p>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="hidden xl:flex items-center gap-6 px-4 border-r border-[#30363d] mr-2">
-            <Switch 
-              label="RTLize" 
-              checked={options.rtlize} 
-              onChange={val => setOptions(prev => ({...prev, rtlize: val}))} 
-            />
-            <Switch 
-              label="No MotionFX" 
-              checked={options.removeMotionFX} 
-              onChange={val => setOptions(prev => ({...prev, removeMotionFX: val}))} 
-            />
-             <Switch 
-              label="Auto Format" 
-              checked={options.autoFormatOnPaste} 
-              onChange={val => setOptions(prev => ({...prev, autoFormatOnPaste: val}))} 
-            />
-            <Switch 
-              label="Auto Convert" 
-              checked={options.autoConvertOnPaste} 
-              onChange={val => setOptions(prev => ({...prev, autoConvertOnPaste: val}))} 
-              description="On Paste"
-            />
-          </div>
-
-          <label className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] text-sm cursor-pointer transition-all">
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Load JSON</span>
-            <input type="file" className="hidden" accept=".json" onChange={handleFileUpload} />
-          </label>
+          <button 
+            onClick={() => setShowSettings(true)}
+            className="p-2 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] transition-all"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
           <button 
             onClick={handleCompress}
             disabled={!inputJSON || isProcessing}
@@ -332,14 +296,11 @@ const App: React.FC = () => {
           >
             <Zap className={`w-4 h-4 ${isProcessing ? 'animate-pulse' : ''}`} />
             <span>{isProcessing ? 'Optimizing...' : 'Convert'}</span>
-            <span className="text-[10px] opacity-70 bg-black/20 px-1.5 rounded ml-1 hidden sm:inline">⌘↵</span>
           </button>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-1 min-h-0 p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
-        {/* Left Side: Input */}
         <div className="flex flex-col gap-3 h-full min-h-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-[#8b949e] font-medium uppercase tracking-wider">
@@ -354,56 +315,17 @@ const App: React.FC = () => {
                 <ClipboardPaste className="w-3.5 h-3.5" />
                 Paste & Optimize
               </button>
-              <button onClick={() => handlePrettify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors">Prettify</button>
-              <button onClick={() => handleMinify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors">Minify</button>
-              <button onClick={handleClearAll} className="p-1.5 text-[#8b949e] hover:text-red-400 transition-colors" title="Clear All">
+              <button onClick={() => setInputJSON('')} className="p-1.5 text-[#8b949e] hover:text-red-400 transition-colors">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
           </div>
-
           <div className="flex-1 min-h-0">
-            <JsonEditor 
-              value={inputJSON} 
-              onChange={setInputJSON} 
-              onMount={handleEditorMount}
-              placeholder='Paste your raw Elementor JSON here...'
-            />
+            <JsonEditor value={inputJSON} onChange={setInputJSON} onMount={handleEditorMount} placeholder='Paste your raw Elementor JSON here...' />
           </div>
-
-          {/* Settings Section (Mobile/Responsive) */}
-          <div className="xl:hidden grid grid-cols-2 gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md overflow-y-auto max-h-32">
-            <Switch 
-              label="RTLize" 
-              checked={options.rtlize} 
-              onChange={val => setOptions(prev => ({...prev, rtlize: val}))} 
-            />
-            <Switch 
-              label="No Motion" 
-              checked={options.removeMotionFX} 
-              onChange={val => setOptions(prev => ({...prev, removeMotionFX: val}))} 
-            />
-             <Switch 
-              label="Format" 
-              checked={options.autoFormatOnPaste} 
-              onChange={val => setOptions(prev => ({...prev, autoFormatOnPaste: val}))} 
-            />
-            <Switch 
-              label="Auto Convert" 
-              checked={options.autoConvertOnPaste} 
-              onChange={val => setOptions(prev => ({...prev, autoConvertOnPaste: val}))} 
-            />
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 p-2 text-sm bg-red-900/20 border border-red-500/30 text-red-400 rounded-md">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="truncate">{error}</span>
-            </div>
-          )}
+          {error && <div className="flex items-center gap-2 p-2 text-sm bg-red-900/20 border border-red-500/30 text-red-400 rounded-md truncate"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
         </div>
 
-        {/* Right Side: Output */}
         <div className="flex flex-col gap-3 h-full min-h-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-[#8b949e] font-medium uppercase tracking-wider">
@@ -411,101 +333,97 @@ const App: React.FC = () => {
               <span>Compressed Result</span>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => handlePrettify('output')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors">Prettify</button>
-              <button onClick={() => handleMinify('output')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors">Minify</button>
-              <div className="h-4 w-[1px] bg-[#30363d] mx-1"></div>
               <button 
-                onClick={() => handleCopy(outputJSON)}
+                onClick={() => { navigator.clipboard.writeText(outputJSON); setCopyStatus('copied'); setTimeout(() => setCopyStatus('idle'), 2000); }}
                 disabled={!outputJSON}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded bg-[#21262d] border border-[#30363d] hover:bg-[#30363d] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded bg-[#21262d] border border-[#30363d] hover:bg-[#30363d] disabled:opacity-50 transition-all"
               >
                 {copyStatus === 'copied' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span className="hidden sm:inline">{copyStatus === 'copied' ? 'Copied!' : 'Copy'}</span>
-              </button>
-              <button 
-                onClick={handleDownload}
-                disabled={!outputJSON}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded bg-[#21262d] border border-[#30363d] hover:bg-[#30363d] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Download</span>
+                <span>{copyStatus === 'copied' ? 'Copied!' : 'Copy'}</span>
               </button>
             </div>
           </div>
           <div className="flex-1 min-h-0">
-            <JsonEditor 
-              value={outputJSON} 
-              readOnly 
-              placeholder='Result will appear here...'
-            />
+            <JsonEditor value={outputJSON} readOnly placeholder='Result will appear here...' />
           </div>
-          
           {stats && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md">
-              <div className="flex flex-col">
-                <span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Original</span>
-                <span className="text-xs font-semibold">{formatByteSize(stats.originalSize)}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Result</span>
-                <span className="text-xs font-semibold text-green-400">{formatByteSize(stats.compressedSize)}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Save</span>
-                <span className="text-xs font-semibold text-[#1f6feb]">{stats.reductionPercentage.toFixed(1)}%</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Removed</span>
-                <span className="text-xs font-semibold">{stats.removedKeys} keys</span>
-              </div>
+            <div className="grid grid-cols-4 gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md">
+              <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Original</span><span className="text-xs font-semibold">{formatByteSize(stats.originalSize)}</span></div>
+              <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Result</span><span className="text-xs font-semibold text-green-400">{formatByteSize(stats.compressedSize)}</span></div>
+              <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Save</span><span className="text-xs font-semibold text-[#1f6feb]">{stats.reductionPercentage.toFixed(1)}%</span></div>
+              <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Removed</span><span className="text-xs font-semibold">{stats.removedKeys} keys</span></div>
             </div>
           )}
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-[#f0f6fc]">Elementor Compressor</span>
-          <span className="px-1.5 py-0.5 rounded-full bg-[#1f6feb] text-[10px] font-mono">v2.5.0</span>
-          <span className="text-[10px] text-[#8b949e] hidden sm:inline ml-2">Built by amirhp.com</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <a href="https://github.com/amirhp-com/elementor-compressor" target="_blank" rel="noopener noreferrer" className="text-[#8b949e] hover:text-[#c9d1d9] transition-colors"><Github className="w-4 h-4" /></a>
-          <a href="https://amirhp.com" target="_blank" rel="noopener noreferrer" className="text-[#8b949e] hover:text-[#c9d1d9] transition-colors"><Globe className="w-4 h-4" /></a>
-        </div>
+      <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10 text-[10px] text-[#8b949e]">
+        <div className="flex items-center gap-2"><span className="font-bold text-[#f0f6fc]">Elementor Compressor</span><span>v2.6.0</span></div>
+        <div className="flex items-center gap-4"><a href="https://github.com/amirhp-com" target="_blank"><Github className="w-4 h-4" /></a><a href="https://amirhp.com" target="_blank"><Globe className="w-4 h-4" /></a></div>
       </footer>
 
-      {/* Immersive Floating Toast (No background overlay) */}
+      {/* Settings Drawer */}
+      <div className={`fixed inset-0 z-50 transition-opacity duration-300 ${showSettings ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)} />
+        <div className={`absolute top-0 right-0 h-full w-full max-w-sm bg-[#161b22] border-l border-[#30363d] shadow-2xl transition-transform duration-300 transform ${showSettings ? 'translate-x-0' : 'translate-x-full'} overflow-y-auto`}>
+          <div className="flex items-center justify-between p-6 border-b border-[#30363d] sticky top-0 bg-[#161b22] z-10">
+            <div className="flex items-center gap-2">
+              <Settings className="w-5 h-5 text-[#58a6ff]" />
+              <h2 className="text-lg font-bold">Optimization Settings</h2>
+            </div>
+            <button onClick={() => setShowSettings(false)} className="p-2 hover:bg-[#30363d] rounded-md"><X className="w-5 h-5" /></button>
+          </div>
+          
+          <div className="p-6 space-y-8 pb-20">
+            {/* Basic Settings */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-[#8b949e] uppercase tracking-wider">General Options</h3>
+              <Switch label="RTLize" checked={options.rtlize} onChange={v => setOptions(p => ({...p, rtlize: v}))} description="Mirror layouts & alignments" />
+              <Switch label="No MotionFX" checked={options.removeMotionFX} onChange={v => setOptions(p => ({...p, removeMotionFX: v}))} description="Strip animations" />
+              <Switch label="Auto Format" checked={options.autoFormatOnPaste} onChange={v => setOptions(p => ({...p, autoFormatOnPaste: v}))} description="Beautify JSON on paste" />
+              <Switch label="Auto Convert" checked={options.autoConvertOnPaste} onChange={v => setOptions(p => ({...p, autoConvertOnPaste: v}))} description="Trigger optimize on paste" />
+            </div>
+
+            {/* Mother Container Padding */}
+            <div className="space-y-4 pt-4 border-t border-[#30363d]">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Mother Container</h3>
+                <Switch label="" checked={options.applyMotherPadding} onChange={v => setOptions(p => ({...p, applyMotherPadding: v}))} />
+              </div>
+              <p className="text-[10px] text-[#8b949e]">Forced 100% width. Margins removed.</p>
+              {options.applyMotherPadding && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <PaddingGrid title="Desktop" icon={Monitor} values={options.motherPadding.desktop} onChange={(k,v) => handleUpdatePadding('mother', 'desktop', k, v)} />
+                  <PaddingGrid title="Tablet" icon={Tablet} values={options.motherPadding.tablet} onChange={(k,v) => handleUpdatePadding('mother', 'tablet', k, v)} />
+                  <PaddingGrid title="Mobile" icon={Smartphone} values={options.motherPadding.mobile} onChange={(k,v) => handleUpdatePadding('mother', 'mobile', k, v)} />
+                </div>
+              )}
+            </div>
+
+            {/* Level 2 Container Padding */}
+            <div className="space-y-4 pt-4 border-t border-[#30363d]">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Level 2 Containers</h3>
+                <Switch label="" checked={options.applyLevel2Padding} onChange={v => setOptions(p => ({...p, applyLevel2Padding: v}))} />
+              </div>
+              <p className="text-[10px] text-[#8b949e]">Forced Boxed. Margins removed.</p>
+              {options.applyLevel2Padding && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <PaddingGrid title="Desktop" icon={Monitor} values={options.level2Padding.desktop} onChange={(k,v) => handleUpdatePadding('level2', 'desktop', k, v)} />
+                  <PaddingGrid title="Tablet" icon={Tablet} values={options.level2Padding.tablet} onChange={(k,v) => handleUpdatePadding('level2', 'tablet', k, v)} />
+                  <PaddingGrid title="Mobile" icon={Smartphone} values={options.level2Padding.mobile} onChange={(k,v) => handleUpdatePadding('level2', 'mobile', k, v)} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {toast.show && (
-        <div 
-          className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center"
-        >
-          {/* Toast Card with high contrast and deep shadow */}
-          <div 
-            onClick={closeToast}
-            className={`relative bg-[#161b22] border ${toast.success ? 'border-[#30363d]' : 'border-red-500/50'} rounded-2xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-300 transform scale-100 shadow-[0_0_50px_rgba(0,0,0,0.8)] pointer-events-auto cursor-pointer transition-all hover:scale-105`}
-          >
-            <div className={`p-6 rounded-full ${toast.success ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'} scale-125 shadow-inner`}>
-              {toast.success ? <Sparkles className="w-12 h-12" /> : <XCircle className="w-12 h-12" />}
-            </div>
-            <div className="text-center">
-              <h2 className={`text-3xl font-bold mb-2 ${toast.success ? 'text-green-400' : 'text-red-400'}`}>
-                {toast.success ? 'Success!' : 'Oops!'}
-              </h2>
-              <p className="text-[#c9d1d9] text-lg font-medium max-w-xs">{toast.message}</p>
-            </div>
-            {toast.success ? (
-              <div className="px-4 py-2 bg-[#21262d] rounded-lg border border-[#30363d] text-sm text-[#8b949e] flex items-center gap-2">
-                <Check className="w-4 h-4 text-green-400" />
-                <span>Ready to use in Elementor</span>
-              </div>
-            ) : (
-              <div className="px-4 py-2 bg-red-900/20 rounded-lg border border-red-500/30 text-xs text-red-400 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
-                <span>Persistent Error: Click to dismiss</span>
-              </div>
-            )}
+        <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
+          <div onClick={() => setToast(p => ({...p, show: false}))} className={`relative bg-[#161b22] border ${toast.success ? 'border-[#30363d]' : 'border-red-500/50'} rounded-2xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-300 transform scale-100 shadow-[0_0_50px_rgba(0,0,0,0.8)] pointer-events-auto cursor-pointer`}>
+            <div className={`p-6 rounded-full ${toast.success ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'} scale-125`}><Sparkles className="w-12 h-12" /></div>
+            <div className="text-center"><h2 className={`text-3xl font-bold mb-2 ${toast.success ? 'text-green-400' : 'text-red-400'}`}>{toast.success ? 'Success!' : 'Oops!'}</h2><p className="text-[#c9d1d9] text-lg font-medium">{toast.message}</p></div>
           </div>
         </div>
       )}
