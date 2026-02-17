@@ -138,11 +138,52 @@ export const compressElementorJSON = (
 
         let cleanedValue = clean(value, key, false, childForceInner);
 
-        // --- RTLize Logic Start ---
+        // --- Hierarchy & Container Logic ---
+        if (isContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
+          if (isThisSectionHolder) {
+            // Mother Section Holder: Force 100% Full Width
+            cleanedValue['content_width'] = 'full';
+            cleanedValue['width'] = { unit: "%", size: 100, sizes: [] };
+            
+            // Cleanup padding/margin defaults for root
+            cleanedValue['margin'] = cleanedValue['margin'] || {
+              "unit": "px",
+              "isLinked": false,
+              "top": "0",
+              "right": "0",
+              "bottom": "0",
+              "left": "0"
+            };
+            
+            if (options.rtlize) {
+              cleanedValue['flex_direction'] = 'row-reverse';
+              if (cleanedValue['_title']) {
+                cleanedValue['_element_id'] = sanitizeToId(cleanedValue['_title']);
+              }
+            }
+          } else if (actingAsInner) {
+            // Nested/2nd Level Container: Force Boxed & REMOVE width properties
+            cleanedValue['content_width'] = 'boxed';
+            delete cleanedValue['width'];
+            delete cleanedValue['width_tablet'];
+            delete cleanedValue['width_mobile'];
+            
+            if (options.rtlize) {
+              cleanedValue['flex_size'] = 'none';
+              // Mirrored row for nested
+              if (cleanedValue['flex_direction'] === 'row') {
+                cleanedValue['flex_direction'] = 'row-reverse';
+              }
+            }
+          }
+        }
+
+        // --- RTLize Widget Logic ---
         if (options.rtlize) {
-          // General Row mirroring: Under setting node, if flex_direction is "row", change to "row-reverse"
+          // Rule: Mirrored flex direction if not already handled
           if (parentKey === 'settings' && key === 'flex_direction' && cleanedValue === 'row') {
-            cleanedValue = 'row-reverse';
+             // If we're not a container (already handled above) we still mirror
+             if (!isContainer) cleanedValue = 'row-reverse';
           }
 
           // Rule: RTLize for text-editor alignment
@@ -154,31 +195,7 @@ export const compressElementorJSON = (
           if (isIconBox && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
             cleanedValue['text_align'] = 'start';
           }
-
-          // Rule: Inner container logic (applied to anything acting as inner)
-          if (isContainer && actingAsInner && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
-            cleanedValue['flex_size'] = 'none';
-          }
-
-          // Rule: SECTION HOLDER SPECIFIC Rules
-          if (isThisSectionHolder && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
-            cleanedValue['content_width'] = 'full';
-            cleanedValue['width'] = { "unit": "%", "size": "", "sizes": [] };
-            cleanedValue['margin'] = {
-              "unit": "px",
-              "isLinked": false,
-              "top": "0",
-              "right": "0",
-              "bottom": "0",
-              "left": "0"
-            };
-            cleanedValue['flex_direction'] = 'row-reverse';
-            if (cleanedValue['_title']) {
-              cleanedValue['_element_id'] = sanitizeToId(cleanedValue['_title']);
-            }
-          }
         }
-        // --- RTLize Logic End ---
 
         if (cleanedValue === null || cleanedValue === undefined) {
           removedCount++;
