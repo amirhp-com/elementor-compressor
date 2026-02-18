@@ -154,6 +154,21 @@ export const compressElementorJSON = (
 
         let cleanedValue = clean(value, key, nextContainerLevel, context);
 
+        // --- RTL Absolute Position Flip ---
+        if (options.rtlize && (key === '_offset_orientation_h' || key === '_offset_orientation_h_tablet' || key === '_offset_orientation_h_mobile')) {
+          // Check position for the specific device or fallback to desktop
+          const posKey = key.includes('_tablet') ? '_position_tablet' : (key.includes('_mobile') ? '_position_mobile' : '_position');
+          const currentPos = val[posKey] || val['_position'];
+          
+          if (currentPos === 'absolute' || currentPos === 'fixed') {
+            if (cleanedValue === 'start') {
+              cleanedValue = 'end';
+            } else if (cleanedValue === 'end') {
+              cleanedValue = 'start';
+            }
+          }
+        }
+
         // --- Container Settings Adjustments ---
         if (isContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
           
