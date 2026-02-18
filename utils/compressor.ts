@@ -23,23 +23,19 @@ const mapPaddingToElementor = (p: PaddingValues) => ({
  * Deeply cleans an Elementor JSON object based on specific optimization rules.
  */
 export const compressElementorJSON = (
-  obj: any, 
+  obj: any,
   options: CompressorOptions
 ): { cleaned: any; removedCount: number } => {
   let removedCount = 0;
-  
-  // Hierarchy Counters
-  let sectionCounter = 0;
-  let globalInnerCounter = 0;
 
   const keysToRemovePrefixes = [
-    "background_hover_video", 
-    "background_motion_fx", 
-    "background_overlay_video", 
-    "background_overlay_hover", 
-    "css_filters_hover", 
-    "box_shadow_hover", 
-    "shape_divider", 
+    "background_hover_video",
+    "background_motion_fx",
+    "background_overlay_video",
+    "background_overlay_hover",
+    "css_filters_hover",
+    "box_shadow_hover",
+    "shape_divider",
     "sticky"
   ];
 
@@ -62,27 +58,26 @@ export const compressElementorJSON = (
    * @param val current node
    * @param parentKey key of the node in parent
    * @param containerLevel depth (1: Section, 2: Container, 3+: Inner)
-   * @param context persistent counters for child numbering
+   * @param context hierarchy path (e.g. "1-2-1")
    */
   const clean = (
-    val: any, 
-    parentKey?: string, 
-    containerLevel: number = 0, 
-    context: { sectionIdx?: number; l2Idx?: number } = {}
+    val: any,
+    parentKey?: string,
+    containerLevel: number = 0,
+    contextPath: string = ""
   ): any => {
     if (Array.isArray(val)) {
-      let currentSectionL2Counter = 0;
+      let containerCounter = 0;
       return val.map((item) => {
-        const isElement = item && typeof item === 'object' && item.elType;
-        let passContext = { ...context };
-        
-        // If we are looking at elements inside a Level 1 container, track the index of Level 2 children
-        if (isElement && item.elType === 'container' && containerLevel === 1) {
-          currentSectionL2Counter++;
-          passContext.l2Idx = currentSectionL2Counter;
+        const isContainer = item && typeof item === 'object' && item.elType === 'container';
+        let itemPath = contextPath;
+
+        if (isContainer) {
+          containerCounter++;
+          itemPath = contextPath ? `${contextPath}-${containerCounter}` : `${containerCounter}`;
         }
 
-        return clean(item, parentKey, containerLevel, passContext);
+        return clean(item, parentKey, containerLevel, itemPath);
       }).filter(item => {
         if (item === null || item === undefined) {
           removedCount++;
@@ -95,35 +90,32 @@ export const compressElementorJSON = (
     if (val !== null && typeof val === 'object') {
       const cleanedObj: any = {};
       let shouldAddFlexAlign = false;
-      
+
       const isContainer = val.elType === 'container';
       const isTextEditor = val.widgetType === 'text-editor';
       const isIconBox = val.widgetType === 'icon-box';
-      
+
       let nextContainerLevel = containerLevel;
       let newName = "";
       let newId = "";
 
       if (isContainer) {
         nextContainerLevel++;
-        if (options.autoRename) {
+        if (options.autoRename && contextPath) {
           if (nextContainerLevel === 1) {
-            sectionCounter++;
-            context.sectionIdx = sectionCounter;
-            newName = `Section ${sectionCounter}`;
-            newId = `section_${sectionCounter}`;
+            newName = `Section ${contextPath}`;
+            newId = `section_${contextPath}`;
           } else if (nextContainerLevel === 2) {
-            newName = `Container ${context.sectionIdx || 1}-${context.l2Idx || 1}`;
+            newName = `Container ${contextPath}`;
           } else {
-            globalInnerCounter++;
-            newName = `Inner ${globalInnerCounter}`;
+            newName = `Inner ${contextPath}`;
           }
         }
       }
 
       for (const key in val) {
         let value = val[key];
-        
+
         if (options.removeMotionFX && key.startsWith('motion_fx_')) {
           removedCount++;
           continue;
@@ -152,14 +144,13 @@ export const compressElementorJSON = (
           continue;
         }
 
-        let cleanedValue = clean(value, key, nextContainerLevel, context);
+        let cleanedValue = clean(value, key, nextContainerLevel, contextPath);
 
         // --- RTL Absolute Position Flip ---
         if (options.rtlize && (key === '_offset_orientation_h' || key === '_offset_orientation_h_tablet' || key === '_offset_orientation_h_mobile')) {
-          // Check position for the specific device or fallback to desktop
           const posKey = key.includes('_tablet') ? '_position_tablet' : (key.includes('_mobile') ? '_position_mobile' : '_position');
           const currentPos = val[posKey] || val['_position'];
-          
+
           if (currentPos === 'absolute' || currentPos === 'fixed') {
             if (cleanedValue === 'start') {
               cleanedValue = 'end';
@@ -171,7 +162,7 @@ export const compressElementorJSON = (
 
         // --- Container Settings Adjustments ---
         if (isContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
-          
+
           // Naming logic
           if (options.autoRename && newName) {
             cleanedValue['_title'] = newName;
@@ -189,7 +180,7 @@ export const compressElementorJSON = (
             // Level 1: Section - Full Width
             cleanedValue['content_width'] = 'full';
             cleanedValue['width'] = { unit: "%", size: 100, sizes: [] };
-            
+
             if (options.applyMotherPadding) {
               cleanedValue['padding'] = mapPaddingToElementor(options.motherPadding.desktop);
               cleanedValue['padding_tablet'] = mapPaddingToElementor(options.motherPadding.tablet);
@@ -208,7 +199,7 @@ export const compressElementorJSON = (
             delete cleanedValue['width'];
             delete cleanedValue['width_tablet'];
             delete cleanedValue['width_mobile'];
-            
+
             if (options.removeLevel2Padding) {
               delete cleanedValue['padding'];
               delete cleanedValue['padding_tablet'];
