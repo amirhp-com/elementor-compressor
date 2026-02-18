@@ -11,7 +11,6 @@ import {
   Github,
   Check,
   AlertCircle,
-  XCircle,
   Sparkles,
   ClipboardPaste,
   Settings,
@@ -140,7 +139,7 @@ const App: React.FC = () => {
   }, [inputJSON]);
 
   const [options, setOptions] = useState<CompressorOptions>(() => {
-    const saved = localStorage.getItem('elementor_compressor_settings_v2');
+    const saved = localStorage.getItem('elementor_compressor_settings_v3');
     return saved ? JSON.parse(saved) : {
       rtlize: false,
       removeMotionFX: false,
@@ -154,7 +153,7 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    localStorage.setItem('elementor_compressor_settings_v2', JSON.stringify(options));
+    localStorage.setItem('elementor_compressor_settings_v3', JSON.stringify(options));
   }, [options]);
 
   const playSuccessSound = () => {
@@ -216,6 +215,55 @@ const App: React.FC = () => {
     performConversion(inputJSON);
   }, [inputJSON, performConversion]);
 
+  const handlePrettify = (target: 'input' | 'output') => {
+    try {
+      const jsonStr = target === 'input' ? inputJSON : outputJSON;
+      if (!jsonStr) return;
+      const formatted = JSON.stringify(JSON.parse(jsonStr), null, 2);
+      if (target === 'input') setInputJSON(formatted);
+      else setOutputJSON(formatted);
+    } catch (e) {
+      showToast(false, 'Failed to format: Invalid JSON');
+    }
+  };
+
+  const handleMinify = (target: 'input' | 'output') => {
+    try {
+      const jsonStr = target === 'input' ? inputJSON : outputJSON;
+      if (!jsonStr) return;
+      const minified = JSON.stringify(JSON.parse(jsonStr));
+      if (target === 'input') setInputJSON(minified);
+      else setOutputJSON(minified);
+    } catch (e) {
+      showToast(false, 'Failed to minify: Invalid JSON');
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      setInputJSON(result);
+      if (options.autoConvertOnPaste) {
+        performConversion(result);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDownload = () => {
+    if (!outputJSON) return;
+    const blob = new Blob([outputJSON], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'elementor-optimized.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleEditorMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => handleCompress());
@@ -271,28 +319,34 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen font-sans bg-[#0d1117] text-[#c9d1d9] overflow-hidden">
-      <header className="flex-none bg-[#161b22] border-b border-[#30363d] px-6 py-3 flex items-center justify-between z-10">
+      <header className="flex-none bg-[#161b22] border-b border-[#30363d] px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
         <div className="flex items-center gap-3">
           <div className="bg-[#1f6feb] p-2 rounded-lg">
             <Maximize2 className="w-5 h-5 text-white" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">v2.6.0: Settings Panel & Margin/Padding Logic</p>
+            <p className="text-xs text-[#8b949e]">v2.8.0: Robust Hierarchy Logic & Margins Fixed</p>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] text-sm cursor-pointer transition-all shadow-sm">
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">Load JSON</span>
+            <input type="file" className="hidden" accept=".json" onChange={handleFileUpload} />
+          </label>
           <button 
             onClick={() => setShowSettings(true)}
-            className="p-2 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] transition-all"
+            className="p-2 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] transition-all shadow-sm"
+            title="Settings"
           >
             <Settings className="w-5 h-5" />
           </button>
           <button 
             onClick={handleCompress}
             disabled={!inputJSON || isProcessing}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-[#238636] hover:bg-[#2ea043] disabled:bg-[#238636]/50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-sm"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-[#238636] hover:bg-[#2ea043] disabled:bg-[#238636]/50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-md"
           >
             <Zap className={`w-4 h-4 ${isProcessing ? 'animate-pulse' : ''}`} />
             <span>{isProcessing ? 'Optimizing...' : 'Convert'}</span>
@@ -308,14 +362,17 @@ const App: React.FC = () => {
               <span>Input Source</span>
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={() => handlePrettify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors" title="Prettify">Prettify</button>
+              <button onClick={() => handleMinify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors" title="Minify">Minify</button>
+              <div className="h-4 w-[1px] bg-[#30363d] mx-1"></div>
               <button 
                 onClick={handlePasteFromClipboard} 
-                className="flex items-center gap-1.5 px-3 py-1 text-xs text-[#c9d1d9] bg-[#1f6feb] border border-[#1f6feb] rounded-md hover:bg-[#388bfd] transition-colors font-semibold"
+                className="flex items-center gap-1.5 px-3 py-1 text-xs text-[#c9d1d9] bg-[#1f6feb] border border-[#1f6feb] rounded-md hover:bg-[#388bfd] transition-colors font-semibold shadow-sm"
               >
                 <ClipboardPaste className="w-3.5 h-3.5" />
                 Paste & Optimize
               </button>
-              <button onClick={() => setInputJSON('')} className="p-1.5 text-[#8b949e] hover:text-red-400 transition-colors">
+              <button onClick={() => setInputJSON('')} className="p-1.5 text-[#8b949e] hover:text-red-400 transition-colors" title="Clear All">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -333,13 +390,24 @@ const App: React.FC = () => {
               <span>Compressed Result</span>
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={() => handlePrettify('output')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors" title="Prettify">Prettify</button>
+              <button onClick={() => handleMinify('output')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors" title="Minify">Minify</button>
+              <div className="h-4 w-[1px] bg-[#30363d] mx-1"></div>
               <button 
                 onClick={() => { navigator.clipboard.writeText(outputJSON); setCopyStatus('copied'); setTimeout(() => setCopyStatus('idle'), 2000); }}
                 disabled={!outputJSON}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded bg-[#21262d] border border-[#30363d] hover:bg-[#30363d] disabled:opacity-50 transition-all"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded bg-[#21262d] border border-[#30363d] hover:bg-[#30363d] disabled:opacity-50 transition-all shadow-sm"
               >
                 {copyStatus === 'copied' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copyStatus === 'copied' ? 'Copied!' : 'Copy'}</span>
+              </button>
+              <button 
+                onClick={handleDownload}
+                disabled={!outputJSON}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded bg-[#21262d] border border-[#30363d] hover:bg-[#30363d] disabled:opacity-50 transition-all shadow-sm"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download</span>
               </button>
             </div>
           </div>
@@ -347,7 +415,7 @@ const App: React.FC = () => {
             <JsonEditor value={outputJSON} readOnly placeholder='Result will appear here...' />
           </div>
           {stats && (
-            <div className="grid grid-cols-4 gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md">
+            <div className="grid grid-cols-4 gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md shadow-sm">
               <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Original</span><span className="text-xs font-semibold">{formatByteSize(stats.originalSize)}</span></div>
               <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Result</span><span className="text-xs font-semibold text-green-400">{formatByteSize(stats.compressedSize)}</span></div>
               <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Save</span><span className="text-xs font-semibold text-[#1f6feb]">{stats.reductionPercentage.toFixed(1)}%</span></div>
@@ -358,8 +426,8 @@ const App: React.FC = () => {
       </main>
 
       <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10 text-[10px] text-[#8b949e]">
-        <div className="flex items-center gap-2"><span className="font-bold text-[#f0f6fc]">Elementor Compressor</span><span>v2.6.0</span></div>
-        <div className="flex items-center gap-4"><a href="https://github.com/amirhp-com" target="_blank"><Github className="w-4 h-4" /></a><a href="https://amirhp.com" target="_blank"><Globe className="w-4 h-4" /></a></div>
+        <div className="flex items-center gap-2"><span className="font-bold text-[#f0f6fc]">Elementor Compressor</span><span>v2.8.0</span></div>
+        <div className="flex items-center gap-4"><a href="https://github.com/amirhp-com" target="_blank" rel="noopener noreferrer"><Github className="w-4 h-4" /></a><a href="https://amirhp.com" target="_blank" rel="noopener noreferrer"><Globe className="w-4 h-4" /></a></div>
       </footer>
 
       {/* Settings Drawer */}
@@ -375,7 +443,6 @@ const App: React.FC = () => {
           </div>
           
           <div className="p-6 space-y-8 pb-20">
-            {/* Basic Settings */}
             <div className="space-y-4">
               <h3 className="text-xs font-bold text-[#8b949e] uppercase tracking-wider">General Options</h3>
               <Switch label="RTLize" checked={options.rtlize} onChange={v => setOptions(p => ({...p, rtlize: v}))} description="Mirror layouts & alignments" />
@@ -384,7 +451,6 @@ const App: React.FC = () => {
               <Switch label="Auto Convert" checked={options.autoConvertOnPaste} onChange={v => setOptions(p => ({...p, autoConvertOnPaste: v}))} description="Trigger optimize on paste" />
             </div>
 
-            {/* Mother Container Padding */}
             <div className="space-y-4 pt-4 border-t border-[#30363d]">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Mother Container</h3>
@@ -400,13 +466,12 @@ const App: React.FC = () => {
               )}
             </div>
 
-            {/* Level 2 Container Padding */}
             <div className="space-y-4 pt-4 border-t border-[#30363d]">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Level 2 Containers</h3>
+                <h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Nested Containers (L2+)</h3>
                 <Switch label="" checked={options.applyLevel2Padding} onChange={v => setOptions(p => ({...p, applyLevel2Padding: v}))} />
               </div>
-              <p className="text-[10px] text-[#8b949e]">Forced Boxed. Margins removed.</p>
+              <p className="text-[10px] text-[#8b949e]">Forced Boxed. Width properties removed. Margins removed.</p>
               {options.applyLevel2Padding && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
                   <PaddingGrid title="Desktop" icon={Monitor} values={options.level2Padding.desktop} onChange={(k,v) => handleUpdatePadding('level2', 'desktop', k, v)} />

@@ -1,6 +1,6 @@
 {
   "name": "Elementor Compressor",
-  "version": "2.6.0",
-  "description": "v2.6.0: Settings Gear, Device-specific Padding for Mother/L2, and complete Margin stripping.",
+  "version": "2.8.0",
+  "description": "v2.8.0: Robust Mother Section detection (ignores input isInner), strict Boxed Level 2 logic, and full margin stripping.",
   "requestFramePermissions": []
 }

@@ -54,9 +54,16 @@ export const compressElementorJSON = (
     return false;
   };
 
-  const clean = (val: any, parentKey?: string, isTopLevel: boolean = false, forceInner: boolean = false): any => {
+  /**
+   * Recursive cleaner
+   * @param val current node
+   * @param parentKey key of the node in parent
+   * @param isRootElementsArray whether we are iterating the top-most 'elements' array
+   * @param containerLevel 0: not in container, 1: Mother, 2+: Nested
+   */
+  const clean = (val: any, parentKey?: string, isRootElementsArray: boolean = false, containerLevel: number = 0): any => {
     if (Array.isArray(val)) {
-      return val.map(item => clean(item, parentKey, isTopLevel, forceInner)).filter(item => {
+      return val.map(item => clean(item, parentKey, isRootElementsArray, containerLevel)).filter(item => {
         if (item === null || item === undefined) {
           removedCount++;
           return false;
@@ -73,28 +80,43 @@ export const compressElementorJSON = (
       const isTextEditor = val.widgetType === 'text-editor';
       const isIconBox = val.widgetType === 'icon-box';
       
-      let isThisSectionHolder = false;
-      if (isTopLevel && isContainer && val.isInner === false && !sectionHolderFound) {
-        isThisSectionHolder = true;
-        sectionHolderFound = true;
-      }
+      // Hierarchy Logic
+      let currentElementLevel = containerLevel;
+      let isThisMother = false;
 
-      const actingAsInner = forceInner || (isContainer && !isThisSectionHolder);
+      // Rule: The first container encountered in the root elements array is the Mother (Level 1)
+      if (isRootElementsArray && isContainer && !sectionHolderFound) {
+        isThisMother = true;
+        sectionHolderFound = true;
+        currentElementLevel = 1;
+      } else if (isContainer) {
+        // If it's a container and not the mother, it's Level 2 or deeper
+        if (containerLevel >= 1) {
+          currentElementLevel = containerLevel + 1;
+        } else {
+          // If for some reason we find a container outside the root elements array logic (e.g. single element paste)
+          // we treat it as Mother if it's the first one.
+          if (!sectionHolderFound) {
+            isThisMother = true;
+            sectionHolderFound = true;
+            currentElementLevel = 1;
+          } else {
+            currentElementLevel = 2;
+          }
+        }
+      }
 
       for (const key in val) {
         let value = val[key];
         
+        // Basic Stripping
         if (options.removeMotionFX && key.startsWith('motion_fx_')) {
           removedCount++;
           continue;
         }
 
         if (options.rtlize) {
-          if (key === 'uich_custom_css_field') {
-            removedCount++;
-            continue;
-          }
-          if (keysToRemovePrefixes.some(p => key.startsWith(p))) {
+          if (key === 'uich_custom_css_field' || keysToRemovePrefixes.some(p => key.startsWith(p))) {
             removedCount++;
             continue;
           }
@@ -116,30 +138,23 @@ export const compressElementorJSON = (
           continue;
         }
 
-        let childForceInner = forceInner;
-        if (isThisSectionHolder && (key === 'elements' || key === 'settings')) {
-          childForceInner = true;
-        }
+        // Recurse
+        // We pass isRootElementsArray=true ONLY if the current key is 'elements' AND we are at the root level of the whole object
+        const nextIsRootArray = (parentKey === undefined && key === 'elements');
+        let cleanedValue = clean(value, key, nextIsRootArray, currentElementLevel);
 
-        if (key === 'isInner' && isContainer && actingAsInner) {
-          cleanedObj[key] = true;
-          continue;
-        }
-
-        let cleanedValue = clean(value, key, false, childForceInner);
-
+        // --- Container Specific Rules ---
         if (isContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
-          // REMOVE MARGINS COMPLETELY for both Mother and Level 2
+          // Rule: Remove margins COMPLETELY for all containers (Mother and Nested)
           delete cleanedValue['margin'];
           delete cleanedValue['margin_tablet'];
           delete cleanedValue['margin_mobile'];
 
-          if (isThisSectionHolder) {
-            // Mother Section Holder
+          if (isThisMother) {
+            // Level 1: Mother Section
             cleanedValue['content_width'] = 'full';
             cleanedValue['width'] = { unit: "%", size: 100, sizes: [] };
             
-            // Apply Padding if checked
             if (options.applyMotherPadding) {
               cleanedValue['padding'] = mapPaddingToElementor(options.motherPadding.desktop);
               cleanedValue['padding_tablet'] = mapPaddingToElementor(options.motherPadding.tablet);
@@ -152,14 +167,15 @@ export const compressElementorJSON = (
                 cleanedValue['_element_id'] = sanitizeToId(cleanedValue['_title']);
               }
             }
-          } else if (actingAsInner) {
-            // Level 2+ Container
+          } else if (currentElementLevel >= 2) {
+            // Level 2+: Nested Containers
             cleanedValue['content_width'] = 'boxed';
+            
+            // Rule: No width property for level 2
             delete cleanedValue['width'];
             delete cleanedValue['width_tablet'];
             delete cleanedValue['width_mobile'];
             
-            // Apply Padding if checked
             if (options.applyLevel2Padding) {
               cleanedValue['padding'] = mapPaddingToElementor(options.level2Padding.desktop);
               cleanedValue['padding_tablet'] = mapPaddingToElementor(options.level2Padding.tablet);
@@ -175,6 +191,16 @@ export const compressElementorJSON = (
           }
         }
 
+        // isInner Logic
+        if (key === 'isInner' && isContainer) {
+          if (isThisMother) {
+            cleanedValue = false; // Mother is typically not an inner container (Section equivalent)
+          } else {
+            cleanedValue = true; // All others are inner
+          }
+        }
+
+        // RTL Widget Alignments
         if (options.rtlize) {
           if (parentKey === 'settings' && key === 'flex_direction' && cleanedValue === 'row') {
              if (!isContainer) cleanedValue = 'row-reverse';
@@ -202,8 +228,9 @@ export const compressElementorJSON = (
         cleanedObj[key] = cleanedValue;
       }
 
-      if (isContainer && actingAsInner && !('isInner' in cleanedObj)) {
-        cleanedObj['isInner'] = true;
+      // Ensure isInner is set if it was missing
+      if (isContainer && !('isInner' in cleanedObj)) {
+        cleanedObj['isInner'] = !isThisMother;
       }
 
       if (shouldAddFlexAlign) {
@@ -217,7 +244,7 @@ export const compressElementorJSON = (
   };
 
   return {
-    cleaned: clean(obj, undefined, true, false),
+    cleaned: clean(obj, undefined, false, 0),
     removedCount
   };
 };
