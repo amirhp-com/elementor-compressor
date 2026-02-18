@@ -353,7 +353,7 @@ const App: React.FC = () => {
           <span>Built by <a href="https://amirhp.com" target="_blank" className="text-[#58a6ff] hover:underline font-bold">AmirhpCom</a></span>
         </div>
         <div className="flex items-center gap-4">
-          <a href="https://github.com/amirhp-com" target="_blank" className="hover:text-[#f0f6fc] transition-colors"><Github className="w-4 h-4" /></a>
+          <a href="https://github.com/amirhp-com/elementor-compressor" target="_blank" className="hover:text-[#f0f6fc] transition-colors"><Github className="w-4 h-4" /></a>
           <a href="https://amirhp.com" target="_blank" className="hover:text-[#f0f6fc] transition-colors"><Globe className="w-4 h-4" /></a>
         </div>
       </footer>
