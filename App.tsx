@@ -131,7 +131,7 @@ const App: React.FC = () => {
   const lastProcessedInput = useRef<string>('');
 
   const [options, setOptions] = useState<CompressorOptions>(() => {
-    const saved = localStorage.getItem('elementor_compressor_settings_v9');
+    const saved = localStorage.getItem('elementor_compressor_settings_v14');
     return saved ? JSON.parse(saved) : {
       rtlize: true,
       removeMotionFX: false,
@@ -139,6 +139,8 @@ const App: React.FC = () => {
       autoConvertOnPaste: true,
       autoRename: true,
       removeMargins: true,
+      removeLevel2Padding: true,
+      removeLevel3Padding: true,
       applyMotherPadding: true,
       motherPadding: { ...defaultDevicePadding },
       applyLevel2Padding: false,
@@ -238,7 +240,7 @@ const App: React.FC = () => {
   }, [inputJSON, options.autoConvertOnPaste, options.autoFormatOnPaste, performConversion]);
 
   useEffect(() => {
-    localStorage.setItem('elementor_compressor_settings_v9', JSON.stringify(options));
+    localStorage.setItem('elementor_compressor_settings_v14', JSON.stringify(options));
   }, [options]);
 
   const handleCompress = useCallback(() => performConversion(inputJSON), [inputJSON, performConversion]);
@@ -248,7 +250,6 @@ const App: React.FC = () => {
       const text = await navigator.clipboard.readText();
       if (text) {
         setInputJSON(text);
-        // performConversion is now handled by the useEffect above
         showToast(true, 'Pasted from Clipboard!');
       } else {
         showToast(false, 'Clipboard is empty');
@@ -318,7 +319,7 @@ const App: React.FC = () => {
       <header className="flex-none bg-[#161b22] border-b border-[#30363d] px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
         <div className="flex items-center gap-3">
           <div className="bg-[#1f6feb] p-2 rounded-lg"><Maximize2 className="w-5 h-5 text-white" /></div>
-          <div><h1 className="text-xl font-bold text-[#f0f6fc]">Elementor Compressor</h1><p className="text-xs text-[#8b949e]">v2.13.0: Hierarchy & Full Control</p></div>
+          <div><h1 className="text-xl font-bold text-[#f0f6fc]">Elementor Compressor</h1><p className="text-xs text-[#8b949e]">A high-performance utility to optimize Elementor JSON (RTLize)</p></div>
         </div>
         
         <div className="flex items-center gap-4">
@@ -377,7 +378,7 @@ const App: React.FC = () => {
       <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10 text-[10px] text-[#8b949e]">
         <div className="flex items-center gap-2 font-medium">
           <span className="text-[#f0f6fc]">Elementor Compressor</span>
-          <span>v2.13.0</span>
+          <span>v2.14.0</span>
           <span className="mx-2 text-[#484f58]">|</span>
           <span>Built by <a href="https://amirhp.com" target="_blank" className="text-[#58a6ff] hover:underline font-bold">AmirhpCom</a></span>
         </div>
@@ -396,8 +397,10 @@ const App: React.FC = () => {
             <div className="space-y-4">
               <h3 className="text-xs font-bold text-[#8b949e] uppercase tracking-wider">General Options</h3>
               <Switch label="RTLize" checked={options.rtlize} onChange={v => setOptions(p => ({...p, rtlize: v}))} description="Mirror layout & alignments (Default: ON)" />
-              <Switch label="Remove Margins" checked={options.removeMargins} onChange={v => setOptions(p => ({...p, removeMargins: v}))} description="Strip all container margins (Default: ON)" />
-              <Switch label="Auto Rename" checked={options.autoRename} onChange={v => setOptions(p => ({...p, autoRename: v}))} description="Section / Container / Inner (Default: ON)" />
+              <Switch label="Remove Margins" checked={options.removeMargins} onChange={v => setOptions(p => ({...p, removeMargins: v}))} description="Strip all container margins" />
+              <Switch label="Strip Level 2 Paddings" checked={options.removeLevel2Padding} onChange={v => setOptions(p => ({...p, removeLevel2Padding: v}))} description="Remove all paddings from Level 2" />
+              <Switch label="Strip Level 3+ Paddings" checked={options.removeLevel3Padding} onChange={v => setOptions(p => ({...p, removeLevel3Padding: v}))} description="Remove all paddings from Inner" />
+              <Switch label="Auto Rename" checked={options.autoRename} onChange={v => setOptions(p => ({...p, autoRename: v}))} description="Section / Container / Inner" />
               <Switch label="Strip Animations" checked={options.removeMotionFX} onChange={v => setOptions(p => ({...p, removeMotionFX: v}))} description="Strip MotionFX properties" />
               <Switch label="Auto Format" checked={options.autoFormatOnPaste} onChange={v => setOptions(p => ({...p, autoFormatOnPaste: v}))} description="Beautify JSON on input" />
               <Switch label="Auto Convert" checked={options.autoConvertOnPaste} onChange={v => setOptions(p => ({...p, autoConvertOnPaste: v}))} description="Optimise instantly on paste" />

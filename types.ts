@@ -18,6 +18,8 @@ export interface CompressorOptions {
   autoConvertOnPaste: boolean;
   autoRename: boolean;
   removeMargins: boolean;
+  removeLevel2Padding: boolean;
+  removeLevel3Padding: boolean;
   applyMotherPadding: boolean;
   motherPadding: DevicePadding;
   applyLevel2Padding: boolean;

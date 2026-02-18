@@ -194,6 +194,12 @@ export const compressElementorJSON = (
             delete cleanedValue['width_tablet'];
             delete cleanedValue['width_mobile'];
             
+            if (options.removeLevel2Padding) {
+              delete cleanedValue['padding'];
+              delete cleanedValue['padding_tablet'];
+              delete cleanedValue['padding_mobile'];
+            }
+
             if (options.applyLevel2Padding) {
               cleanedValue['padding'] = mapPaddingToElementor(options.level2Padding.desktop);
               cleanedValue['padding_tablet'] = mapPaddingToElementor(options.level2Padding.tablet);
@@ -210,6 +216,12 @@ export const compressElementorJSON = (
             delete cleanedValue['width'];
             delete cleanedValue['width_tablet'];
             delete cleanedValue['width_mobile'];
+
+            if (options.removeLevel3Padding) {
+              delete cleanedValue['padding'];
+              delete cleanedValue['padding_tablet'];
+              delete cleanedValue['padding_mobile'];
+            }
 
             if (options.applyLevel3Padding) {
               cleanedValue['padding'] = mapPaddingToElementor(options.level3Padding.desktop);
