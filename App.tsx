@@ -128,13 +128,7 @@ const App: React.FC = () => {
   
   const editorRef = useRef<any>(null);
   const toastTimeoutRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!inputJSON.trim()) {
-      setOutputJSON('');
-      setStats(null);
-    }
-  }, [inputJSON]);
+  const lastProcessedInput = useRef<string>('');
 
   const [options, setOptions] = useState<CompressorOptions>(() => {
     const saved = localStorage.getItem('elementor_compressor_settings_v9');
@@ -153,10 +147,6 @@ const App: React.FC = () => {
       level3Padding: { ...defaultDevicePadding }
     };
   });
-
-  useEffect(() => {
-    localStorage.setItem('elementor_compressor_settings_v9', JSON.stringify(options));
-  }, [options]);
 
   const playSuccessSound = () => {
     try {
@@ -193,6 +183,7 @@ const App: React.FC = () => {
       const { cleaned, removedCount } = compressElementorJSON(parsed, options);
       const compressed = JSON.stringify(cleaned, null, 2);
       const compressedBytes = new TextEncoder().encode(compressed).length;
+      
       setOutputJSON(compressed);
       setStats({
         originalSize: originalBytes,
@@ -200,6 +191,8 @@ const App: React.FC = () => {
         reductionPercentage: originalBytes > 0 ? ((originalBytes - compressedBytes) / originalBytes) * 100 : 0,
         removedKeys: removedCount
       });
+      
+      lastProcessedInput.current = rawJson;
       navigator.clipboard.writeText(compressed);
       setCopyStatus('copied');
       setTimeout(() => setCopyStatus('idle'), 2000);
@@ -211,6 +204,43 @@ const App: React.FC = () => {
     }
   }, [options, showToast]);
 
+  // Effect to handle Auto-Convert and Auto-Format when inputJSON changes
+  useEffect(() => {
+    if (!inputJSON.trim()) {
+      setOutputJSON('');
+      setStats(null);
+      lastProcessedInput.current = '';
+      return;
+    }
+
+    // Only auto-trigger if the input is significantly different from last processed 
+    // and options are enabled. This handles Ctrl+V into the editor.
+    if (options.autoConvertOnPaste && inputJSON !== lastProcessedInput.current) {
+      const timer = setTimeout(() => {
+        performConversion(inputJSON);
+        
+        // Handle Auto Formatting of input if requested
+        if (options.autoFormatOnPaste) {
+          try {
+            const formatted = JSON.stringify(JSON.parse(inputJSON), null, 2);
+            if (formatted !== inputJSON) {
+              setInputJSON(formatted);
+              lastProcessedInput.current = formatted;
+            }
+          } catch (e) {
+            // Silently fail formatting if JSON is invalid
+          }
+        }
+      }, 500); // Debounce to allow user to finish pasting/small edits
+      
+      return () => clearTimeout(timer);
+    }
+  }, [inputJSON, options.autoConvertOnPaste, options.autoFormatOnPaste, performConversion]);
+
+  useEffect(() => {
+    localStorage.setItem('elementor_compressor_settings_v9', JSON.stringify(options));
+  }, [options]);
+
   const handleCompress = useCallback(() => performConversion(inputJSON), [inputJSON, performConversion]);
 
   const handlePaste = async () => {
@@ -218,7 +248,7 @@ const App: React.FC = () => {
       const text = await navigator.clipboard.readText();
       if (text) {
         setInputJSON(text);
-        if (options.autoConvertOnPaste) performConversion(text);
+        // performConversion is now handled by the useEffect above
         showToast(true, 'Pasted from Clipboard!');
       } else {
         showToast(false, 'Clipboard is empty');
@@ -255,7 +285,6 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       const result = event.target?.result as string;
       setInputJSON(result);
-      if (options.autoConvertOnPaste) performConversion(result);
     };
     reader.readAsText(file);
   };
