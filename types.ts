@@ -16,10 +16,14 @@ export interface CompressorOptions {
   removeMotionFX: boolean;
   autoFormatOnPaste: boolean;
   autoConvertOnPaste: boolean;
+  autoRename: boolean;
+  removeMargins: boolean;
   applyMotherPadding: boolean;
   motherPadding: DevicePadding;
   applyLevel2Padding: boolean;
   level2Padding: DevicePadding;
+  applyLevel3Padding: boolean;
+  level3Padding: DevicePadding;
 }
 
 export interface CompressorStats {

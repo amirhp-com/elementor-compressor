@@ -27,7 +27,10 @@ export const compressElementorJSON = (
   options: CompressorOptions
 ): { cleaned: any; removedCount: number } => {
   let removedCount = 0;
-  let sectionHolderFound = false;
+  
+  // Hierarchy Counters
+  let sectionCounter = 0;
+  let globalInnerCounter = 0;
 
   const keysToRemovePrefixes = [
     "background_hover_video", 
@@ -58,12 +61,29 @@ export const compressElementorJSON = (
    * Recursive cleaner
    * @param val current node
    * @param parentKey key of the node in parent
-   * @param isRootElementsArray whether we are iterating the top-most 'elements' array
-   * @param containerLevel 0: not in container, 1: Mother, 2+: Nested
+   * @param containerLevel depth (1: Section, 2: Container, 3+: Inner)
+   * @param context persistent counters for child numbering
    */
-  const clean = (val: any, parentKey?: string, isRootElementsArray: boolean = false, containerLevel: number = 0): any => {
+  const clean = (
+    val: any, 
+    parentKey?: string, 
+    containerLevel: number = 0, 
+    context: { sectionIdx?: number; l2Idx?: number } = {}
+  ): any => {
     if (Array.isArray(val)) {
-      return val.map(item => clean(item, parentKey, isRootElementsArray, containerLevel)).filter(item => {
+      let currentSectionL2Counter = 0;
+      return val.map((item) => {
+        const isElement = item && typeof item === 'object' && item.elType;
+        let passContext = { ...context };
+        
+        // If we are looking at elements inside a Level 1 container, track the index of Level 2 children
+        if (isElement && item.elType === 'container' && containerLevel === 1) {
+          currentSectionL2Counter++;
+          passContext.l2Idx = currentSectionL2Counter;
+        }
+
+        return clean(item, parentKey, containerLevel, passContext);
+      }).filter(item => {
         if (item === null || item === undefined) {
           removedCount++;
           return false;
@@ -80,28 +100,23 @@ export const compressElementorJSON = (
       const isTextEditor = val.widgetType === 'text-editor';
       const isIconBox = val.widgetType === 'icon-box';
       
-      // Hierarchy Logic
-      let currentElementLevel = containerLevel;
-      let isThisMother = false;
+      let nextContainerLevel = containerLevel;
+      let newName = "";
+      let newId = "";
 
-      // Rule: The first container encountered in the root elements array is the Mother (Level 1)
-      if (isRootElementsArray && isContainer && !sectionHolderFound) {
-        isThisMother = true;
-        sectionHolderFound = true;
-        currentElementLevel = 1;
-      } else if (isContainer) {
-        // If it's a container and not the mother, it's Level 2 or deeper
-        if (containerLevel >= 1) {
-          currentElementLevel = containerLevel + 1;
-        } else {
-          // If for some reason we find a container outside the root elements array logic (e.g. single element paste)
-          // we treat it as Mother if it's the first one.
-          if (!sectionHolderFound) {
-            isThisMother = true;
-            sectionHolderFound = true;
-            currentElementLevel = 1;
+      if (isContainer) {
+        nextContainerLevel++;
+        if (options.autoRename) {
+          if (nextContainerLevel === 1) {
+            sectionCounter++;
+            context.sectionIdx = sectionCounter;
+            newName = `Section ${sectionCounter}`;
+            newId = `section_${sectionCounter}`;
+          } else if (nextContainerLevel === 2) {
+            newName = `Container ${context.sectionIdx || 1}-${context.l2Idx || 1}`;
           } else {
-            currentElementLevel = 2;
+            globalInnerCounter++;
+            newName = `Inner ${globalInnerCounter}`;
           }
         }
       }
@@ -109,7 +124,6 @@ export const compressElementorJSON = (
       for (const key in val) {
         let value = val[key];
         
-        // Basic Stripping
         if (options.removeMotionFX && key.startsWith('motion_fx_')) {
           removedCount++;
           continue;
@@ -138,20 +152,26 @@ export const compressElementorJSON = (
           continue;
         }
 
-        // Recurse
-        // We pass isRootElementsArray=true ONLY if the current key is 'elements' AND we are at the root level of the whole object
-        const nextIsRootArray = (parentKey === undefined && key === 'elements');
-        let cleanedValue = clean(value, key, nextIsRootArray, currentElementLevel);
+        let cleanedValue = clean(value, key, nextContainerLevel, context);
 
-        // --- Container Specific Rules ---
+        // --- Container Settings Adjustments ---
         if (isContainer && key === 'settings' && cleanedValue && typeof cleanedValue === 'object') {
-          // Rule: Remove margins COMPLETELY for all containers (Mother and Nested)
-          delete cleanedValue['margin'];
-          delete cleanedValue['margin_tablet'];
-          delete cleanedValue['margin_mobile'];
+          
+          // Naming logic
+          if (options.autoRename && newName) {
+            cleanedValue['_title'] = newName;
+            if (newId) cleanedValue['_element_id'] = newId;
+          }
 
-          if (isThisMother) {
-            // Level 1: Mother Section
+          // Independent Margin logic
+          if (options.removeMargins) {
+            delete cleanedValue['margin'];
+            delete cleanedValue['margin_tablet'];
+            delete cleanedValue['margin_mobile'];
+          }
+
+          if (nextContainerLevel === 1) {
+            // Level 1: Section - Full Width
             cleanedValue['content_width'] = 'full';
             cleanedValue['width'] = { unit: "%", size: 100, sizes: [] };
             
@@ -163,15 +183,13 @@ export const compressElementorJSON = (
 
             if (options.rtlize) {
               cleanedValue['flex_direction'] = 'row-reverse';
-              if (cleanedValue['_title']) {
+              if (!options.autoRename && cleanedValue['_title'] && !cleanedValue['_element_id']) {
                 cleanedValue['_element_id'] = sanitizeToId(cleanedValue['_title']);
               }
             }
-          } else if (currentElementLevel >= 2) {
-            // Level 2+: Nested Containers
+          } else if (nextContainerLevel === 2) {
+            // Level 2: Boxed, stripped widths
             cleanedValue['content_width'] = 'boxed';
-            
-            // Rule: No width property for level 2
             delete cleanedValue['width'];
             delete cleanedValue['width_tablet'];
             delete cleanedValue['width_mobile'];
@@ -184,20 +202,30 @@ export const compressElementorJSON = (
 
             if (options.rtlize) {
               cleanedValue['flex_size'] = 'none';
-              if (cleanedValue['flex_direction'] === 'row') {
-                cleanedValue['flex_direction'] = 'row-reverse';
-              }
+              if (cleanedValue['flex_direction'] === 'row') cleanedValue['flex_direction'] = 'row-reverse';
+            }
+          } else {
+            // Level 3+: Inner
+            cleanedValue['content_width'] = 'boxed';
+            delete cleanedValue['width'];
+            delete cleanedValue['width_tablet'];
+            delete cleanedValue['width_mobile'];
+
+            if (options.applyLevel3Padding) {
+              cleanedValue['padding'] = mapPaddingToElementor(options.level3Padding.desktop);
+              cleanedValue['padding_tablet'] = mapPaddingToElementor(options.level3Padding.tablet);
+              cleanedValue['padding_mobile'] = mapPaddingToElementor(options.level3Padding.mobile);
+            }
+
+            if (options.rtlize && cleanedValue['flex_direction'] === 'row') {
+              cleanedValue['flex_direction'] = 'row-reverse';
             }
           }
         }
 
-        // isInner Logic
+        // isInner flag logic
         if (key === 'isInner' && isContainer) {
-          if (isThisMother) {
-            cleanedValue = false; // Mother is typically not an inner container (Section equivalent)
-          } else {
-            cleanedValue = true; // All others are inner
-          }
+          cleanedValue = (nextContainerLevel !== 1);
         }
 
         // RTL Widget Alignments
@@ -228,9 +256,8 @@ export const compressElementorJSON = (
         cleanedObj[key] = cleanedValue;
       }
 
-      // Ensure isInner is set if it was missing
       if (isContainer && !('isInner' in cleanedObj)) {
-        cleanedObj['isInner'] = !isThisMother;
+        cleanedObj['isInner'] = (nextContainerLevel !== 1);
       }
 
       if (shouldAddFlexAlign) {
@@ -244,7 +271,7 @@ export const compressElementorJSON = (
   };
 
   return {
-    cleaned: clean(obj, undefined, false, 0),
+    cleaned: clean(obj),
     removedCount
   };
 };

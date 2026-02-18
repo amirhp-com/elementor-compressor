@@ -123,7 +123,6 @@ const App: React.FC = () => {
   const [stats, setStats] = useState<CompressorStats | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
-  const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<{ show: boolean; success: boolean; message: string }>({ show: false, success: false, message: '' });
   
@@ -134,26 +133,29 @@ const App: React.FC = () => {
     if (!inputJSON.trim()) {
       setOutputJSON('');
       setStats(null);
-      setError(null);
     }
   }, [inputJSON]);
 
   const [options, setOptions] = useState<CompressorOptions>(() => {
-    const saved = localStorage.getItem('elementor_compressor_settings_v3');
+    const saved = localStorage.getItem('elementor_compressor_settings_v9');
     return saved ? JSON.parse(saved) : {
-      rtlize: false,
+      rtlize: true,
       removeMotionFX: false,
       autoFormatOnPaste: true,
       autoConvertOnPaste: true,
+      autoRename: true,
+      removeMargins: true,
       applyMotherPadding: true,
       motherPadding: { ...defaultDevicePadding },
       applyLevel2Padding: false,
-      level2Padding: { ...defaultDevicePadding }
+      level2Padding: { ...defaultDevicePadding },
+      applyLevel3Padding: false,
+      level3Padding: { ...defaultDevicePadding }
     };
   });
 
   useEffect(() => {
-    localStorage.setItem('elementor_compressor_settings_v3', JSON.stringify(options));
+    localStorage.setItem('elementor_compressor_settings_v9', JSON.stringify(options));
   }, [options]);
 
   const playSuccessSound = () => {
@@ -178,14 +180,13 @@ const App: React.FC = () => {
     setToast({ show: true, success, message });
     if (success) {
       playSuccessSound();
-      toastTimeoutRef.current = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 2000);
+      toastTimeoutRef.current = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
     }
   }, []);
 
   const performConversion = useCallback((rawJson: string) => {
     if (!rawJson.trim()) return;
     setIsProcessing(true);
-    setError(null);
     try {
       const parsed = JSON.parse(rawJson);
       const originalBytes = new TextEncoder().encode(rawJson).length;
@@ -204,16 +205,28 @@ const App: React.FC = () => {
       setTimeout(() => setCopyStatus('idle'), 2000);
       showToast(true, 'Optimized & Copied to Clipboard!');
     } catch (e: any) {
-      setError(`Invalid JSON: ${e.message}`);
       showToast(false, `Conversion Failed: ${e.message}`);
     } finally {
       setIsProcessing(false);
     }
   }, [options, showToast]);
 
-  const handleCompress = useCallback(() => {
-    performConversion(inputJSON);
-  }, [inputJSON, performConversion]);
+  const handleCompress = useCallback(() => performConversion(inputJSON), [inputJSON, performConversion]);
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setInputJSON(text);
+        if (options.autoConvertOnPaste) performConversion(text);
+        showToast(true, 'Pasted from Clipboard!');
+      } else {
+        showToast(false, 'Clipboard is empty');
+      }
+    } catch (err) {
+      showToast(false, 'Clipboard access denied');
+    }
+  };
 
   const handlePrettify = (target: 'input' | 'output') => {
     try {
@@ -222,9 +235,7 @@ const App: React.FC = () => {
       const formatted = JSON.stringify(JSON.parse(jsonStr), null, 2);
       if (target === 'input') setInputJSON(formatted);
       else setOutputJSON(formatted);
-    } catch (e) {
-      showToast(false, 'Failed to format: Invalid JSON');
-    }
+    } catch (e) { showToast(false, 'Invalid JSON'); }
   };
 
   const handleMinify = (target: 'input' | 'output') => {
@@ -234,9 +245,7 @@ const App: React.FC = () => {
       const minified = JSON.stringify(JSON.parse(jsonStr));
       if (target === 'input') setInputJSON(minified);
       else setOutputJSON(minified);
-    } catch (e) {
-      showToast(false, 'Failed to minify: Invalid JSON');
-    }
+    } catch (e) { showToast(false, 'Invalid JSON'); }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -246,9 +255,7 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       const result = event.target?.result as string;
       setInputJSON(result);
-      if (options.autoConvertOnPaste) {
-        performConversion(result);
-      }
+      if (options.autoConvertOnPaste) performConversion(result);
     };
     reader.readAsText(file);
   };
@@ -264,54 +271,14 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleEditorMount = (editor: any, monaco: any) => {
-    editorRef.current = editor;
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => handleCompress());
-    editor.onDidPaste(() => {
-      setTimeout(() => {
-        const val = editor.getValue();
-        if (options.autoFormatOnPaste) {
-          try {
-            const formatted = JSON.stringify(JSON.parse(val), null, 2);
-            setInputJSON(formatted);
-            if (options.autoConvertOnPaste) performConversion(formatted);
-          } catch (e) {
-            setInputJSON(val);
-            if (options.autoConvertOnPaste) performConversion(val);
-          }
-        } else {
-          setInputJSON(val);
-          if (options.autoConvertOnPaste) performConversion(val);
-        }
-      }, 100);
-    });
-  };
-
-  const handlePasteFromClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        let final = text;
-        if (options.autoFormatOnPaste) {
-          try { final = JSON.stringify(JSON.parse(text), null, 2); } catch(e){}
-        }
-        setInputJSON(final);
-        performConversion(final);
-      }
-    } catch (err) { showToast(false, 'Clipboard access denied'); }
-  };
-
-  const handleUpdatePadding = (target: 'mother' | 'level2', device: keyof DevicePadding, key: keyof PaddingValues, val: string) => {
+  const handleUpdatePadding = (target: 'mother' | 'level2' | 'level3', device: keyof DevicePadding, key: keyof PaddingValues, val: string) => {
     setOptions(prev => {
-      const padKey = target === 'mother' ? 'motherPadding' : 'level2Padding';
+      const padKey = target === 'mother' ? 'motherPadding' : target === 'level2' ? 'level2Padding' : 'level3Padding';
       return {
         ...prev,
         [padKey]: {
           ...prev[padKey],
-          [device]: {
-            ...prev[padKey][device],
-            [key]: val
-          }
+          [device]: { ...prev[padKey][device], [key]: val }
         }
       }
     });
@@ -321,164 +288,108 @@ const App: React.FC = () => {
     <div className="flex flex-col h-screen font-sans bg-[#0d1117] text-[#c9d1d9] overflow-hidden">
       <header className="flex-none bg-[#161b22] border-b border-[#30363d] px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
         <div className="flex items-center gap-3">
-          <div className="bg-[#1f6feb] p-2 rounded-lg">
-            <Maximize2 className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-[#f0f6fc]">Elementor Compressor</h1>
-            <p className="text-xs text-[#8b949e]">v2.8.0: Robust Hierarchy Logic & Margins Fixed</p>
-          </div>
+          <div className="bg-[#1f6feb] p-2 rounded-lg"><Maximize2 className="w-5 h-5 text-white" /></div>
+          <div><h1 className="text-xl font-bold text-[#f0f6fc]">Elementor Compressor</h1><p className="text-xs text-[#8b949e]">v2.13.0: Hierarchy & Full Control</p></div>
         </div>
         
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] text-sm cursor-pointer transition-all shadow-sm">
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Load JSON</span>
-            <input type="file" className="hidden" accept=".json" onChange={handleFileUpload} />
-          </label>
-          <button 
-            onClick={() => setShowSettings(true)}
-            className="p-2 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] transition-all shadow-sm"
-            title="Settings"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={handleCompress}
-            disabled={!inputJSON || isProcessing}
-            className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-[#238636] hover:bg-[#2ea043] disabled:bg-[#238636]/50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-md"
-          >
-            <Zap className={`w-4 h-4 ${isProcessing ? 'animate-pulse' : ''}`} />
-            <span>{isProcessing ? 'Optimizing...' : 'Convert'}</span>
-          </button>
+          <label className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] text-sm cursor-pointer shadow-sm transition-all"><Upload className="w-4 h-4" /><span>Load File</span><input type="file" className="hidden" accept=".json" onChange={handleFileUpload} /></label>
+          <button onClick={() => setShowSettings(true)} className="p-2 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] shadow-sm"><Settings className="w-5 h-5" /></button>
+          <button onClick={handleCompress} disabled={!inputJSON || isProcessing} className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-[#238636] hover:bg-[#2ea043] disabled:bg-[#238636]/50 text-white text-sm font-semibold transition-all shadow-md"><Zap className={`w-4 h-4 ${isProcessing ? 'animate-pulse' : ''}`} /><span>{isProcessing ? 'Processing' : 'Convert'}</span></button>
         </div>
       </header>
 
       <main className="flex-1 min-h-0 p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
         <div className="flex flex-col gap-3 h-full min-h-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-[#8b949e] font-medium uppercase tracking-wider">
-              <FileJson className="w-4 h-4" />
-              <span>Input Source</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => handlePrettify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors" title="Prettify">Prettify</button>
-              <button onClick={() => handleMinify('input')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors" title="Minify">Minify</button>
+            <div className="flex items-center gap-2 text-sm text-[#8b949e] font-medium uppercase tracking-wider"><FileJson className="w-4 h-4" /><span>Input Source</span></div>
+            <div className="flex items-center gap-3 text-xs">
+              <button onClick={handlePaste} className="flex items-center gap-1.5 px-2 py-1 bg-[#21262d] border border-[#30363d] rounded text-[#c9d1d9] hover:bg-[#30363d] transition-colors"><ClipboardPaste className="w-3 h-3" /><span>Paste</span></button>
               <div className="h-4 w-[1px] bg-[#30363d] mx-1"></div>
-              <button 
-                onClick={handlePasteFromClipboard} 
-                className="flex items-center gap-1.5 px-3 py-1 text-xs text-[#c9d1d9] bg-[#1f6feb] border border-[#1f6feb] rounded-md hover:bg-[#388bfd] transition-colors font-semibold shadow-sm"
-              >
-                <ClipboardPaste className="w-3.5 h-3.5" />
-                Paste & Optimize
-              </button>
-              <button onClick={() => setInputJSON('')} className="p-1.5 text-[#8b949e] hover:text-red-400 transition-colors" title="Clear All">
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <button onClick={() => handlePrettify('input')} className="text-[#8b949e] hover:text-[#58a6ff]">Prettify</button>
+              <button onClick={() => handleMinify('input')} className="text-[#8b949e] hover:text-[#58a6ff]">Minify</button>
+              <div className="h-4 w-[1px] bg-[#30363d] mx-1"></div>
+              <button onClick={() => setInputJSON('')} className="text-[#8b949e] hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
             </div>
           </div>
           <div className="flex-1 min-h-0">
-            <JsonEditor value={inputJSON} onChange={setInputJSON} onMount={handleEditorMount} placeholder='Paste your raw Elementor JSON here...' />
+            <JsonEditor value={inputJSON} onChange={setInputJSON} onMount={(e, m) => {
+              editorRef.current = e;
+              e.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.Enter, () => handleCompress());
+            }} placeholder='Paste Elementor JSON here...' />
           </div>
-          {error && <div className="flex items-center gap-2 p-2 text-sm bg-red-900/20 border border-red-500/30 text-red-400 rounded-md truncate"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
         </div>
 
         <div className="flex flex-col gap-3 h-full min-h-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-[#8b949e] font-medium uppercase tracking-wider">
-              <Zap className="w-4 h-4" />
-              <span>Compressed Result</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => handlePrettify('output')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors" title="Prettify">Prettify</button>
-              <button onClick={() => handleMinify('output')} className="p-1.5 text-xs text-[#8b949e] hover:text-[#58a6ff] transition-colors" title="Minify">Minify</button>
+            <div className="flex items-center gap-2 text-sm text-[#8b949e] font-medium uppercase tracking-wider"><Zap className="w-4 h-4" /><span>Optimized Result</span></div>
+            <div className="flex items-center gap-3 text-xs">
+              <button onClick={() => handlePrettify('output')} className="text-[#8b949e] hover:text-[#58a6ff]">Prettify</button>
+              <button onClick={() => handleMinify('output')} className="text-[#8b949e] hover:text-[#58a6ff]">Minify</button>
               <div className="h-4 w-[1px] bg-[#30363d] mx-1"></div>
-              <button 
-                onClick={() => { navigator.clipboard.writeText(outputJSON); setCopyStatus('copied'); setTimeout(() => setCopyStatus('idle'), 2000); }}
-                disabled={!outputJSON}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded bg-[#21262d] border border-[#30363d] hover:bg-[#30363d] disabled:opacity-50 transition-all shadow-sm"
-              >
-                {copyStatus === 'copied' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copyStatus === 'copied' ? 'Copied!' : 'Copy'}</span>
-              </button>
-              <button 
-                onClick={handleDownload}
-                disabled={!outputJSON}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded bg-[#21262d] border border-[#30363d] hover:bg-[#30363d] disabled:opacity-50 transition-all shadow-sm"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download</span>
-              </button>
+              <button onClick={() => { navigator.clipboard.writeText(outputJSON); setCopyStatus('copied'); setTimeout(() => setCopyStatus('idle'), 2000); }} disabled={!outputJSON} className="flex items-center gap-1.5 px-3 py-1 font-semibold rounded bg-[#1f6feb] border border-[#1f6feb] text-white hover:bg-[#388bfd] transition-all">{copyStatus === 'copied' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}<span>Copy</span></button>
+              <button onClick={handleDownload} disabled={!outputJSON} className="p-1.5 rounded bg-[#21262d] border border-[#30363d] text-[#c9d1d9] hover:bg-[#30363d] transition-all"><Download className="w-4 h-4" /></button>
             </div>
           </div>
           <div className="flex-1 min-h-0">
             <JsonEditor value={outputJSON} readOnly placeholder='Result will appear here...' />
           </div>
           {stats && (
-            <div className="grid grid-cols-4 gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md shadow-sm">
-              <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Original</span><span className="text-xs font-semibold">{formatByteSize(stats.originalSize)}</span></div>
-              <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Result</span><span className="text-xs font-semibold text-green-400">{formatByteSize(stats.compressedSize)}</span></div>
-              <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Save</span><span className="text-xs font-semibold text-[#1f6feb]">{stats.reductionPercentage.toFixed(1)}%</span></div>
-              <div className="flex flex-col"><span className="text-[9px] text-[#8b949e] uppercase font-bold tracking-widest">Removed</span><span className="text-xs font-semibold">{stats.removedKeys} keys</span></div>
+            <div className="grid grid-cols-4 gap-4 p-3 bg-[#161b22] border border-[#30363d] rounded-md text-[10px] shadow-sm">
+              <div className="flex flex-col"><span className="text-[#8b949e] uppercase font-bold tracking-widest">Original</span><span className="text-xs font-semibold">{formatByteSize(stats.originalSize)}</span></div>
+              <div className="flex flex-col"><span className="text-[#8b949e] uppercase font-bold tracking-widest">Result</span><span className="text-xs font-semibold text-green-400">{formatByteSize(stats.compressedSize)}</span></div>
+              <div className="flex flex-col"><span className="text-[#8b949e] uppercase font-bold tracking-widest">Save</span><span className="text-xs font-semibold text-[#1f6feb]">{stats.reductionPercentage.toFixed(1)}%</span></div>
+              <div className="flex flex-col"><span className="text-[#8b949e] uppercase font-bold tracking-widest">Removed</span><span className="text-xs font-semibold">{stats.removedKeys} keys</span></div>
             </div>
           )}
         </div>
       </main>
 
       <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10 text-[10px] text-[#8b949e]">
-        <div className="flex items-center gap-2"><span className="font-bold text-[#f0f6fc]">Elementor Compressor</span><span>v2.8.0</span></div>
-        <div className="flex items-center gap-4"><a href="https://github.com/amirhp-com" target="_blank" rel="noopener noreferrer"><Github className="w-4 h-4" /></a><a href="https://amirhp.com" target="_blank" rel="noopener noreferrer"><Globe className="w-4 h-4" /></a></div>
+        <div className="flex items-center gap-2 font-medium">
+          <span className="text-[#f0f6fc]">Elementor Compressor</span>
+          <span>v2.13.0</span>
+          <span className="mx-2 text-[#484f58]">|</span>
+          <span>Built by <a href="https://amirhp.com" target="_blank" className="text-[#58a6ff] hover:underline font-bold">AmirhpCom</a></span>
+        </div>
+        <div className="flex items-center gap-4">
+          <a href="https://github.com/amirhp-com" target="_blank" className="hover:text-[#f0f6fc] transition-colors"><Github className="w-4 h-4" /></a>
+          <a href="https://amirhp.com" target="_blank" className="hover:text-[#f0f6fc] transition-colors"><Globe className="w-4 h-4" /></a>
+        </div>
       </footer>
 
       {/* Settings Drawer */}
       <div className={`fixed inset-0 z-50 transition-opacity duration-300 ${showSettings ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)} />
         <div className={`absolute top-0 right-0 h-full w-full max-w-sm bg-[#161b22] border-l border-[#30363d] shadow-2xl transition-transform duration-300 transform ${showSettings ? 'translate-x-0' : 'translate-x-full'} overflow-y-auto`}>
-          <div className="flex items-center justify-between p-6 border-b border-[#30363d] sticky top-0 bg-[#161b22] z-10">
-            <div className="flex items-center gap-2">
-              <Settings className="w-5 h-5 text-[#58a6ff]" />
-              <h2 className="text-lg font-bold">Optimization Settings</h2>
-            </div>
-            <button onClick={() => setShowSettings(false)} className="p-2 hover:bg-[#30363d] rounded-md"><X className="w-5 h-5" /></button>
-          </div>
-          
-          <div className="p-6 space-y-8 pb-20">
+          <div className="flex items-center justify-between p-6 border-b border-[#30363d] sticky top-0 bg-[#161b22] z-20"><div className="flex items-center gap-2"><Settings className="w-5 h-5 text-[#58a6ff]" /><h2 className="text-lg font-bold">Optimization Settings</h2></div><button onClick={() => setShowSettings(false)} className="p-2 hover:bg-[#30363d] rounded-md transition-colors"><X className="w-5 h-5" /></button></div>
+          <div className="p-6 space-y-8 pb-24">
             <div className="space-y-4">
               <h3 className="text-xs font-bold text-[#8b949e] uppercase tracking-wider">General Options</h3>
-              <Switch label="RTLize" checked={options.rtlize} onChange={v => setOptions(p => ({...p, rtlize: v}))} description="Mirror layouts & alignments" />
-              <Switch label="No MotionFX" checked={options.removeMotionFX} onChange={v => setOptions(p => ({...p, removeMotionFX: v}))} description="Strip animations" />
-              <Switch label="Auto Format" checked={options.autoFormatOnPaste} onChange={v => setOptions(p => ({...p, autoFormatOnPaste: v}))} description="Beautify JSON on paste" />
-              <Switch label="Auto Convert" checked={options.autoConvertOnPaste} onChange={v => setOptions(p => ({...p, autoConvertOnPaste: v}))} description="Trigger optimize on paste" />
+              <Switch label="RTLize" checked={options.rtlize} onChange={v => setOptions(p => ({...p, rtlize: v}))} description="Mirror layout & alignments (Default: ON)" />
+              <Switch label="Remove Margins" checked={options.removeMargins} onChange={v => setOptions(p => ({...p, removeMargins: v}))} description="Strip all container margins (Default: ON)" />
+              <Switch label="Auto Rename" checked={options.autoRename} onChange={v => setOptions(p => ({...p, autoRename: v}))} description="Section / Container / Inner (Default: ON)" />
+              <Switch label="Strip Animations" checked={options.removeMotionFX} onChange={v => setOptions(p => ({...p, removeMotionFX: v}))} description="Strip MotionFX properties" />
+              <Switch label="Auto Format" checked={options.autoFormatOnPaste} onChange={v => setOptions(p => ({...p, autoFormatOnPaste: v}))} description="Beautify JSON on input" />
+              <Switch label="Auto Convert" checked={options.autoConvertOnPaste} onChange={v => setOptions(p => ({...p, autoConvertOnPaste: v}))} description="Optimise instantly on paste" />
             </div>
 
-            <div className="space-y-4 pt-4 border-t border-[#30363d]">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Mother Container</h3>
-                <Switch label="" checked={options.applyMotherPadding} onChange={v => setOptions(p => ({...p, applyMotherPadding: v}))} />
+            <div className="space-y-6 pt-4 border-t border-[#30363d]">
+              {/* L1 */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Level 1 (Sections)</h3><Switch label="" checked={options.applyMotherPadding} onChange={v => setOptions(p => ({...p, applyMotherPadding: v}))} /></div>
+                {options.applyMotherPadding && <div className="space-y-4 animate-in fade-in duration-200"><PaddingGrid title="Desktop" icon={Monitor} values={options.motherPadding.desktop} onChange={(k,v) => handleUpdatePadding('mother', 'desktop', k, v)} /><PaddingGrid title="Tablet" icon={Tablet} values={options.motherPadding.tablet} onChange={(k,v) => handleUpdatePadding('mother', 'tablet', k, v)} /><PaddingGrid title="Mobile" icon={Smartphone} values={options.motherPadding.mobile} onChange={(k,v) => handleUpdatePadding('mother', 'mobile', k, v)} /></div>}
               </div>
-              <p className="text-[10px] text-[#8b949e]">Forced 100% width. Margins removed.</p>
-              {options.applyMotherPadding && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <PaddingGrid title="Desktop" icon={Monitor} values={options.motherPadding.desktop} onChange={(k,v) => handleUpdatePadding('mother', 'desktop', k, v)} />
-                  <PaddingGrid title="Tablet" icon={Tablet} values={options.motherPadding.tablet} onChange={(k,v) => handleUpdatePadding('mother', 'tablet', k, v)} />
-                  <PaddingGrid title="Mobile" icon={Smartphone} values={options.motherPadding.mobile} onChange={(k,v) => handleUpdatePadding('mother', 'mobile', k, v)} />
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-4 pt-4 border-t border-[#30363d]">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Nested Containers (L2+)</h3>
-                <Switch label="" checked={options.applyLevel2Padding} onChange={v => setOptions(p => ({...p, applyLevel2Padding: v}))} />
+              {/* L2 */}
+              <div className="space-y-4 pt-4 border-t border-[#30363d]">
+                <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Level 2 (Containers)</h3><Switch label="" checked={options.applyLevel2Padding} onChange={v => setOptions(p => ({...p, applyLevel2Padding: v}))} /></div>
+                {options.applyLevel2Padding && <div className="space-y-4 animate-in fade-in duration-200"><PaddingGrid title="Desktop" icon={Monitor} values={options.level2Padding.desktop} onChange={(k,v) => handleUpdatePadding('level2', 'desktop', k, v)} /><PaddingGrid title="Tablet" icon={Tablet} values={options.level2Padding.tablet} onChange={(k,v) => handleUpdatePadding('level2', 'tablet', k, v)} /><PaddingGrid title="Mobile" icon={Smartphone} values={options.level2Padding.mobile} onChange={(k,v) => handleUpdatePadding('level2', 'mobile', k, v)} /></div>}
               </div>
-              <p className="text-[10px] text-[#8b949e]">Forced Boxed. Width properties removed. Margins removed.</p>
-              {options.applyLevel2Padding && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <PaddingGrid title="Desktop" icon={Monitor} values={options.level2Padding.desktop} onChange={(k,v) => handleUpdatePadding('level2', 'desktop', k, v)} />
-                  <PaddingGrid title="Tablet" icon={Tablet} values={options.level2Padding.tablet} onChange={(k,v) => handleUpdatePadding('level2', 'tablet', k, v)} />
-                  <PaddingGrid title="Mobile" icon={Smartphone} values={options.level2Padding.mobile} onChange={(k,v) => handleUpdatePadding('level2', 'mobile', k, v)} />
-                </div>
-              )}
+              {/* L3+ */}
+              <div className="space-y-4 pt-4 border-t border-[#30363d]">
+                <div className="flex items-center justify-between"><h3 className="text-xs font-bold text-[#f0f6fc] uppercase tracking-wider">Level 3+ (Inner)</h3><Switch label="" checked={options.applyLevel3Padding} onChange={v => setOptions(p => ({...p, applyLevel3Padding: v}))} /></div>
+                {options.applyLevel3Padding && <div className="space-y-4 animate-in fade-in duration-200"><PaddingGrid title="Desktop" icon={Monitor} values={options.level3Padding.desktop} onChange={(k,v) => handleUpdatePadding('level3', 'desktop', k, v)} /><PaddingGrid title="Tablet" icon={Tablet} values={options.level3Padding.tablet} onChange={(k,v) => handleUpdatePadding('level3', 'tablet', k, v)} /><PaddingGrid title="Mobile" icon={Smartphone} values={options.level3Padding.mobile} onChange={(k,v) => handleUpdatePadding('level3', 'mobile', k, v)} /></div>}
+              </div>
             </div>
           </div>
         </div>
@@ -486,9 +397,24 @@ const App: React.FC = () => {
 
       {toast.show && (
         <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
-          <div onClick={() => setToast(p => ({...p, show: false}))} className={`relative bg-[#161b22] border ${toast.success ? 'border-[#30363d]' : 'border-red-500/50'} rounded-2xl p-8 flex flex-col items-center gap-6 animate-in fade-in duration-300 transform scale-100 shadow-[0_0_50px_rgba(0,0,0,0.8)] pointer-events-auto cursor-pointer`}>
-            <div className={`p-6 rounded-full ${toast.success ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'} scale-125`}><Sparkles className="w-12 h-12" /></div>
-            <div className="text-center"><h2 className={`text-3xl font-bold mb-2 ${toast.success ? 'text-green-400' : 'text-red-400'}`}>{toast.success ? 'Success!' : 'Oops!'}</h2><p className="text-[#c9d1d9] text-lg font-medium">{toast.message}</p></div>
+          <div 
+            onClick={() => setToast(p => ({...p, show: false}))} 
+            className={`relative bg-[#161b22]/90 backdrop-blur-md border ${toast.success ? 'border-[#238636]' : 'border-red-500/50'} rounded-2xl p-10 flex flex-col items-center gap-6 animate-in fade-in zoom-in duration-300 transform scale-100 shadow-[0_0_80px_rgba(0,0,0,0.9)] pointer-events-auto cursor-pointer max-w-sm w-full mx-4`}
+          >
+            <div className={`p-6 rounded-full ${toast.success ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'} scale-125`}>
+              {toast.success ? <Sparkles className="w-14 h-14" /> : <AlertCircle className="w-14 h-14" />}
+            </div>
+            <div className="text-center">
+              <h2 className={`text-4xl font-bold mb-3 ${toast.success ? 'text-green-400' : 'text-red-400'}`}>
+                {toast.success ? 'Success!' : 'Oops!'}
+              </h2>
+              <p className="text-[#f0f6fc] text-xl font-medium leading-relaxed">
+                {toast.message}
+              </p>
+            </div>
+            <div className="text-[10px] text-[#8b949e] uppercase font-bold tracking-widest mt-2">
+              Click to Dismiss
+            </div>
           </div>
         </div>
       )}
