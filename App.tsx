@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  FileJson, 
-  Download, 
-  Copy, 
-  Zap, 
-  Trash2, 
-  Maximize2, 
+import {
+  FileJson,
+  Download,
+  Copy,
+  Zap,
+  Trash2,
+  Maximize2,
   Upload,
   Globe,
   Github,
@@ -34,14 +34,14 @@ const defaultDevicePadding: DevicePadding = {
   mobile: { ...defaultPadding }
 };
 
-const Switch = ({ 
-  label, 
-  checked, 
-  onChange, 
-  description 
-}: { 
-  label: string; 
-  checked: boolean; 
+const Switch = ({
+  label,
+  checked,
+  onChange,
+  description
+}: {
+  label: string;
+  checked: boolean;
   onChange: (val: boolean) => void;
   description?: string;
 }) => (
@@ -50,7 +50,7 @@ const Switch = ({
       <span className="text-sm font-medium text-[#c9d1d9] group-hover:text-[#f0f6fc] transition-colors">{label}</span>
       {description && <span className="text-[10px] text-[#8b949e]">{description}</span>}
     </div>
-    <div 
+    <div
       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1f6feb] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${checked ? 'bg-[#238636]' : 'bg-[#30363d]'}`}
     >
       <span
@@ -60,15 +60,15 @@ const Switch = ({
   </div>
 );
 
-const PaddingGrid = ({ 
-  title, 
-  icon: Icon, 
-  values, 
-  onChange 
-}: { 
-  title: string; 
-  icon: any; 
-  values: PaddingValues; 
+const PaddingGrid = ({
+  title,
+  icon: Icon,
+  values,
+  onChange
+}: {
+  title: string;
+  icon: any;
+  values: PaddingValues;
   onChange: (key: keyof PaddingValues, val: string) => void;
 }) => (
   <div className="space-y-2">
@@ -79,38 +79,38 @@ const PaddingGrid = ({
     <div className="grid grid-cols-4 gap-2">
       <div className="relative">
         <ArrowUp className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#484f58]" />
-        <input 
-          type="text" 
-          value={values.top} 
+        <input
+          type="text"
+          value={values.top}
           onChange={(e) => onChange('top', e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none" 
+          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none"
         />
       </div>
       <div className="relative">
         <ArrowRight className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#484f58]" />
-        <input 
-          type="text" 
-          value={values.right} 
+        <input
+          type="text"
+          value={values.right}
           onChange={(e) => onChange('right', e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none" 
+          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none"
         />
       </div>
       <div className="relative">
         <ArrowDown className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#484f58]" />
-        <input 
-          type="text" 
-          value={values.bottom} 
+        <input
+          type="text"
+          value={values.bottom}
           onChange={(e) => onChange('bottom', e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none" 
+          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none"
         />
       </div>
       <div className="relative">
         <ArrowLeft className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#484f58]" />
-        <input 
-          type="text" 
-          value={values.left} 
+        <input
+          type="text"
+          value={values.left}
           onChange={(e) => onChange('left', e.target.value)}
-          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none" 
+          className="w-full bg-[#0d1117] border border-[#30363d] rounded py-1 pl-6 pr-1 text-xs text-center focus:border-[#58a6ff] outline-none"
         />
       </div>
     </div>
@@ -125,7 +125,7 @@ const App: React.FC = () => {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<{ show: boolean; success: boolean; message: string }>({ show: false, success: false, message: '' });
-  
+
   const editorRef = useRef<any>(null);
   const toastTimeoutRef = useRef<any>(null);
   const lastProcessedInput = useRef<string>('');
@@ -185,7 +185,7 @@ const App: React.FC = () => {
       const { cleaned, removedCount } = compressElementorJSON(parsed, options);
       const compressed = JSON.stringify(cleaned, null, 2);
       const compressedBytes = new TextEncoder().encode(compressed).length;
-      
+
       setOutputJSON(compressed);
       setStats({
         originalSize: originalBytes,
@@ -193,7 +193,7 @@ const App: React.FC = () => {
         reductionPercentage: originalBytes > 0 ? ((originalBytes - compressedBytes) / originalBytes) * 100 : 0,
         removedKeys: removedCount
       });
-      
+
       lastProcessedInput.current = rawJson;
       navigator.clipboard.writeText(compressed);
       setCopyStatus('copied');
@@ -215,12 +215,12 @@ const App: React.FC = () => {
       return;
     }
 
-    // Only auto-trigger if the input is significantly different from last processed 
+    // Only auto-trigger if the input is significantly different from last processed
     // and options are enabled. This handles Ctrl+V into the editor.
     if (options.autoConvertOnPaste && inputJSON !== lastProcessedInput.current) {
       const timer = setTimeout(() => {
         performConversion(inputJSON);
-        
+
         // Handle Auto Formatting of input if requested
         if (options.autoFormatOnPaste) {
           try {
@@ -234,7 +234,7 @@ const App: React.FC = () => {
           }
         }
       }, 500); // Debounce to allow user to finish pasting/small edits
-      
+
       return () => clearTimeout(timer);
     }
   }, [inputJSON, options.autoConvertOnPaste, options.autoFormatOnPaste, performConversion]);
@@ -321,7 +321,7 @@ const App: React.FC = () => {
           <div className="bg-[#1f6feb] p-2 rounded-lg"><Maximize2 className="w-5 h-5 text-white" /></div>
           <div><h1 className="text-xl font-bold text-[#f0f6fc]">Elementor Compressor</h1><p className="text-xs text-[#8b949e]">A high-performance utility to optimize Elementor JSON (RTLize)</p></div>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] text-sm cursor-pointer shadow-sm transition-all"><Upload className="w-4 h-4" /><span>Load File</span><input type="file" className="hidden" accept=".json" onChange={handleFileUpload} /></label>
           <button onClick={() => setShowSettings(true)} className="p-2 rounded-md border border-[#30363d] bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9] shadow-sm"><Settings className="w-5 h-5" /></button>
@@ -378,7 +378,7 @@ const App: React.FC = () => {
       <footer className="flex-none bg-[#0d1117] border-t border-[#30363d] px-6 py-3 flex items-center justify-between z-10 text-[10px] text-[#8b949e]">
         <div className="flex items-center gap-2 font-medium">
           <span className="text-[#f0f6fc]">Elementor Compressor</span>
-          <span>v2.14.0</span>
+          <span>v2.15.0</span>
           <span className="mx-2 text-[#484f58]">|</span>
           <span>Built by <a href="https://amirhp.com" target="_blank" className="text-[#58a6ff] hover:underline font-bold">AmirhpCom</a></span>
         </div>
@@ -429,8 +429,8 @@ const App: React.FC = () => {
 
       {toast.show && (
         <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
-          <div 
-            onClick={() => setToast(p => ({...p, show: false}))} 
+          <div
+            onClick={() => setToast(p => ({...p, show: false}))}
             className={`relative bg-[#161b22]/90 backdrop-blur-md border ${toast.success ? 'border-[#238636]' : 'border-red-500/50'} rounded-2xl p-10 flex flex-col items-center gap-6 animate-in fade-in zoom-in duration-300 transform scale-100 shadow-[0_0_80px_rgba(0,0,0,0.9)] pointer-events-auto cursor-pointer max-w-sm w-full mx-4`}
           >
             <div className={`p-6 rounded-full ${toast.success ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'} scale-125`}>

@@ -218,10 +218,14 @@ export const compressElementorJSON = (
             }
           } else {
             // Level 3+: Inner
-            cleanedValue['content_width'] = 'boxed';
-            delete cleanedValue['width'];
-            delete cleanedValue['width_tablet'];
-            delete cleanedValue['width_mobile'];
+            cleanedValue['content_width'] = 'full';
+            cleanedValue['width'] = { unit: "%", size: 100, sizes: [] };
+            cleanedValue['width_tablet'] = { unit: "%", size: 100, sizes: [] };
+            cleanedValue['width_mobile'] = { unit: "%", size: 100, sizes: [] };
+
+            // delete cleanedValue['width'];
+            // delete cleanedValue['width_tablet'];
+            // delete cleanedValue['width_mobile'];
 
             if (options.removeLevel3Padding) {
               delete cleanedValue['padding'];

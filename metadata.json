@@ -1,6 +1,6 @@
 {
   "name": "Elementor Compressor",
-  "version": "2.14.0",
-  "description": "v2.14.0: Added options to strip Level 2/3 paddings, updated repo links.",
+  "version": "2.15.0",
+  "description": "v2.15.0: Fixed Inner width to fullwide",
   "requestFramePermissions": []
 }
